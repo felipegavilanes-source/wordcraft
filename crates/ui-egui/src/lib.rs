@@ -237,6 +237,10 @@ pub struct UiState {
     pub recent: Vec<String>,
     /// Symbols inserted from the Symbol dialog, most recent first (#321).
     pub recent_symbols: Vec<dialogs_insert::RecentSymbol>,
+    /// Preferences for the Insert > Date & Time dialog.
+    pub date_time_format: String,
+    pub date_time_language: String,
+    pub date_time_update: bool,
     /// Colours picked in the Colors dialog (More Colors…), most recent first (#606).
     pub recent_colors: Vec<String>,
     /// Interface theme: light, dark, or follow the OS appearance (#115).
@@ -344,6 +348,9 @@ impl Default for UiState {
             ribbon_collapsed: false,
             recent: Vec::new(),
             recent_symbols: Vec::new(),
+            date_time_format: String::new(),
+            date_time_language: String::new(),
+            date_time_update: true,
             recent_colors: Vec::new(),
             theme: theme::Appearance::default(),
             interface_size: theme::InterfaceSize::default(),

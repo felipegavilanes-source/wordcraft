@@ -96,7 +96,7 @@ pub fn specs() -> Vec<CommandSpec> {
             s.doc.last_section.footers = Default::default();
             sel_result(s)
         }),
-        CommandSpec::new("insert.dateTime", "Date & Time", "Insert › Text", date_time).params(r#"{"format"?: "M/d/yyyy", "update"?: bool}"#),
+        CommandSpec::new("insert.dateTime", "Date & Time", "Insert › Text", date_time).params(r#"{"format"?: "M/d/yyyy", "update"?: bool, "language"?: "en-US|pt-BR"}"#),
         CommandSpec::new("insert.symbol", "Symbol", "Insert › Symbols", symbol).params(r#"{"char": string, "font"?: family (the symbol's own font)}"#),
         CommandSpec::new("insert.field", "Field", "Insert › Text › Quick Parts", field).key("Mod+F9").params(r#"{"instr": string, "result"?: string}"#),
         // Word's Alt+Shift+D / T / P (Control+Shift+… in Word for Mac): DATE, TIME and PAGE fields.
@@ -771,9 +771,17 @@ fn page_number(s: &mut Session, v: &Value) -> CmdResult {
 
 fn date_time(s: &mut Session, v: &Value) -> CmdResult {
     let fmt = p::str(v, "format").unwrap_or("M/d/yyyy");
-    let text = format_date(fmt);
+    let language = p::str(v, "language");
+    if language.is_some_and(|l| !matches!(l, "en-US" | "pt-BR")) {
+        return Err(CmdError::Params("language must be en-US or pt-BR".into()));
+    }
+    if fmt.is_empty() || fmt.len() > 120 || fmt.contains('"') || fmt.contains('\\') {
+        return Err(CmdError::Params("invalid date picture".into()));
+    }
+    let text = format_date_in(fmt, language);
     if p::bool(v, "update").unwrap_or(false) {
-        let props = s.typing_props();
+        let mut props = s.typing_props();
+        if let Some(l) = language { props.lang = Some(l.to_string()); }
         let at = delete_selection(s)?;
         let end = s.doc.insert_object(
             &at,
@@ -994,6 +1002,19 @@ fn cover_page(s: &mut Session, v: &Value) -> CmdResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn pt_br_date_time_dialog_inserts_dynamic_field() {
+        let mut s = Session::new(wordcraft_doc::Document::new());
+        s.run("insert.dateTime", &json!({"format": "d 'de' MMMM 'de' yyyy", "language": "pt-BR", "update": true})).unwrap();
+        let bytes = wordcraft_docx::write(&s.doc).unwrap();
+        let mut doc = wordcraft_docx::read(&bytes).unwrap();
+        crate::cmd::references::refresh_date_fields(&mut doc);
+        let paths = doc.para_paths(StoryRef::Body);
+        let p = doc.para(StoryRef::Body, &paths[0]).unwrap();
+        let InlineObject::Field { result, .. } = &p.objects[0] else { panic!("expected field") };
+        assert_eq!(result, &format_date_in("d 'de' MMMM 'de' yyyy", Some("pt-BR")));
+    }
+
 
     /// #960: editing the header of a page that has none creates the one that page shows (first
     /// page, even page or default); typing goes into it, and closing an unwritten one takes it
