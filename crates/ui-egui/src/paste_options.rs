@@ -197,6 +197,55 @@ mod tests {
         assert_eq!(at_caret(Pos2::new(490.0, 590.0), 18.0, view), Pos2::new(418.0, 572.0));
     }
 
+    /// Switching the pop-up style edits the already inserted text, not a second paste.
+    #[test]
+    fn a_paste_can_be_reformatted_without_duplicating_text() {
+        let mut app = WordApp::new(
+            wordcraft_engine::Session::new(wordcraft_doc::Document::from_text("Before ")),
+            crate::Services::default(),
+        );
+        app.run("caret.docEnd", json!({})).unwrap();
+        app.run("edit.paste", json!({"text": "after"})).unwrap();
+        assert_eq!(app.session.doc.plain_text(wordcraft_doc::StoryRef::Body), "Before after");
+        assert!(app.paste_options.as_ref().is_some_and(|p| p.current(&app)));
+        switch(&mut app, PasteMode::Text);
+        assert_eq!(app.session.doc.plain_text(wordcraft_doc::StoryRef::Body), "Before after");
+        assert!(app.paste_options.as_ref().is_some_and(|p| p.mode == PasteMode::Text));
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.doc.plain_text(wordcraft_doc::StoryRef::Body), "Before ");
+        assert!(app.paste_options.is_none());
+    }
+
+    /// The contextual menu never undoes typing, navigation or a new paste after the first one.
+    #[test]
+    fn another_edit_dismisses_paste_options() {
+        let mut app = WordApp::new(
+            wordcraft_engine::Session::new(wordcraft_doc::Document::new()),
+            crate::Services::default(),
+        );
+        app.run("edit.paste", json!({"text": "pasted"})).unwrap();
+        assert!(app.paste_options.is_some());
+        app.run("text.insert", json!({"text": "!"})).unwrap();
+        assert!(app.paste_options.is_none());
+        switch(&mut app, PasteMode::Merge);
+        assert_eq!(app.session.doc.plain_text(wordcraft_doc::StoryRef::Body), "pasted!");
+    }
+
+    /// The Advanced setting applies to the normal Paste shortcut without changing clipboard text.
+    #[test]
+    fn saved_paste_mode_is_used_for_next_text_paste() {
+        let mut app = WordApp::new(
+            wordcraft_engine::Session::new(wordcraft_doc::Document::new()),
+            crate::Services::default(),
+        );
+        app.ui.default_paste = "merge".into();
+        app.run("edit.paste", json!({"text": "hello"})).unwrap();
+        assert!(app.paste_options.as_ref().is_some_and(|p| p.mode == PasteMode::Merge));
+        assert_eq!(app.session.doc.plain_text(wordcraft_doc::StoryRef::Body), "hello");
+        let restored = crate::UiState::from_json(&serde_json::to_vec(&app.ui).unwrap()).unwrap();
+        assert_eq!(restored.default_paste, "merge");
+    }
+
     #[test]
     fn paste_modes_keep_the_existing_engine_commands() {
         assert_eq!(PasteMode::Source.command(), "edit.paste");
