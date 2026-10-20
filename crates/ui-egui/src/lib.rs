@@ -245,6 +245,8 @@ pub struct UiState {
     pub recent: Vec<String>,
     /// Symbols inserted from the Symbol dialog, most recent first (#321).
     pub recent_symbols: Vec<dialogs_insert::RecentSymbol>,
+    /// Shape gallery choices, most recent first (known icon ids; capped at eight).
+    pub recent_shapes: Vec<String>,
     /// Colours picked in the Colors dialog (More Colors…), most recent first (#606).
     pub recent_colors: Vec<String>,
     /// Fonts applied from the font box, the mini toolbar or the Font dialog, most recent first:
@@ -364,6 +366,7 @@ impl Default for UiState {
             quick_access_toolbar: true,
             recent: Vec::new(),
             recent_symbols: Vec::new(),
+            recent_shapes: Vec::new(),
             recent_colors: Vec::new(),
             recent_fonts: Vec::new(),
             theme: theme::Appearance::default(),
