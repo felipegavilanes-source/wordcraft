@@ -150,37 +150,39 @@ pub fn show(app: &mut WordApp, ctx: &egui::Context) {
         return; // Keep its document anchor while scrolled away.
     }
     let at = at_caret(caret, height, viewport.intersect(ctx.screen_rect()));
-    egui::Area::new(egui::Id::new("post_paste_options"))
-        .order(Order::Foreground)
-        .fixed_pos(at)
-        .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.menu_button("📋 ▾", |ui| {
-                    ui.label(egui::RichText::new(tl!("Paste as:")).strong());
-                    ui.horizontal(|ui| {
-                        for mode in [PasteMode::Source, PasteMode::Merge, PasteMode::Text] {
-                            let selected = app.paste_options.as_ref().is_some_and(|p| p.mode == mode);
-                            let resp = ui.add(egui::Button::new(match mode {
-                                PasteMode::Source => "▣",
-                                PasteMode::Merge => "▤",
-                                PasteMode::Text => "A",
-                            }).selected(selected).min_size(vec2(42.0, 32.0)))
-                                .on_hover_text(tl!(mode.label()));
-                            if resp.clicked() {
-                                switch(app, mode);
-                                ui.close();
-                            }
+    egui::Area::new(egui::Id::new("post_paste_options")).order(Order::Foreground).fixed_pos(at).show(ctx, |ui| {
+        egui::Frame::popup(ui.style()).show(ui, |ui| {
+            ui.menu_button("📋 ▾", |ui| {
+                ui.label(egui::RichText::new(tl!("Paste as:")).strong());
+                ui.horizontal(|ui| {
+                    for mode in [PasteMode::Source, PasteMode::Merge, PasteMode::Text] {
+                        let selected = app.paste_options.as_ref().is_some_and(|p| p.mode == mode);
+                        let resp = ui
+                            .add(
+                                egui::Button::new(match mode {
+                                    PasteMode::Source => "▣",
+                                    PasteMode::Merge => "▤",
+                                    PasteMode::Text => "A",
+                                })
+                                .selected(selected)
+                                .min_size(vec2(42.0, 32.0)),
+                            )
+                            .on_hover_text(tl!(mode.label()));
+                        if resp.clicked() {
+                            switch(app, mode);
+                            ui.close();
                         }
-                    });
-                    ui.separator();
-                    if ui.button(tl!("Set as Default")).clicked() {
-                        app.paste_options = None;
-                        let _ = app.run("file.options", json!({"pane": "advanced"}));
-                        ui.close();
                     }
                 });
+                ui.separator();
+                if ui.button(tl!("Set as Default")).clicked() {
+                    app.paste_options = None;
+                    let _ = app.run("file.options", json!({"pane": "advanced"}));
+                    ui.close();
+                }
             });
         });
+    });
 }
 
 /// Match Word's position: immediately underneath and near the text end, clamped to the page area.
