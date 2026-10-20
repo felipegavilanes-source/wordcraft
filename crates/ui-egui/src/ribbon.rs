@@ -3041,6 +3041,64 @@ mod tests {
     use super::*;
     use wordcraft_engine::Session;
 
+    /// The visual gallery retains every command supported by the original text menu.
+    #[test]
+    fn shapes_gallery_covers_existing_shape_commands() {
+        let mut ids = std::collections::HashSet::new();
+        assert_eq!(SHAPE_CHOICES.len(), 15);
+        for shape in SHAPE_CHOICES {
+            assert!(ids.insert(shape.icon), "repeated icon {}", shape.icon);
+            let mut session = Session::new(wordcraft_doc::Document::new());
+            session.run("insert.shape", &shape.params()).unwrap();
+            assert!(matches!(
+                wordcraft_engine::cmd::objects::selected(&session),
+                Some((_, wordcraft_doc::para::InlineObject::Shape { .. }))
+            ), "not inserted: {}", shape.label);
+        }
+        assert_eq!(SHAPE_CHOICES.iter().filter(|choice| choice.group == ShapeGroup::Lines).count(), 4);
+        assert_eq!(SHAPE_CHOICES.iter().filter(|choice| choice.group == ShapeGroup::Shapes).count(), 7);
+        assert_eq!(SHAPE_CHOICES.iter().filter(|choice| choice.group == ShapeGroup::Arrows).count(), 4);
+    }
+
+    /// Recent shapes are distinct and newest-first; invalid persisted ids are never added.
+    #[test]
+    fn recent_shapes_keep_the_last_eight_known_shapes() {
+        let mut list = Vec::new();
+        remember_shape(&mut list, "unrecognized");
+        assert!(list.is_empty());
+        for choice in SHAPE_CHOICES.iter().take(10) {
+            remember_shape(&mut list, choice.icon);
+        }
+        assert_eq!(list.len(), MAX_RECENT_SHAPES);
+        assert_eq!(list[0], SHAPE_CHOICES[9].icon);
+        assert_eq!(list[7], SHAPE_CHOICES[2].icon);
+        remember_shape(&mut list, SHAPE_CHOICES[7].icon);
+        assert_eq!(list[0], SHAPE_CHOICES[7].icon);
+        assert_eq!(list.len(), MAX_RECENT_SHAPES);
+    }
+
+    /// Click an icon rather than sending a command by hand: it must insert a selected shape
+    /// and populate the Recently Used strip of the same gallery.
+    #[test]
+    fn shapes_gallery_click_inserts_shape_and_remembers_it() {
+        use egui_kittest::kittest::Queryable;
+        let app = WordApp::new(Session::new(wordcraft_doc::Document::new()), crate::Services::default());
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(vec2(420.0, 600.0))
+            .build_ui_state(|ui, app: &mut WordApp| shapes_gallery(ui, app), app);
+        h.run_steps(3);
+        h.get_by_label("Rectangle").click();
+        h.run_steps(2);
+        assert_eq!(h.state().ui.recent_shapes, vec!["rectangle"]);
+        assert!(matches!(
+            wordcraft_engine::cmd::objects::selected(&h.state().session),
+            Some((_, wordcraft_doc::para::InlineObject::Shape { .. }))
+        ));
+        assert!(h.query(egui_kittest::kittest::By::new().label_contains("New Drawing Canvas")).is_some());
+    }
+
+
+
     /// Two clicks arm and disarm the painter; the double-click handling then leaves it sticky (#2785).
     #[test]
     fn double_click_on_format_painter_makes_it_sticky() {
