@@ -200,10 +200,7 @@ mod tests {
     /// Switching the pop-up style edits the already inserted text, not a second paste.
     #[test]
     fn a_paste_can_be_reformatted_without_duplicating_text() {
-        let mut app = WordApp::new(
-            wordcraft_engine::Session::new(wordcraft_doc::Document::from_text("Before ")),
-            crate::Services::default(),
-        );
+        let mut app = WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::from_text("Before ")), crate::Services::default());
         app.run("caret.docEnd", json!({})).unwrap();
         app.run("edit.paste", json!({"text": "after"})).unwrap();
         assert_eq!(app.session.doc.plain_text(wordcraft_doc::StoryRef::Body), "Before after");
@@ -219,10 +216,7 @@ mod tests {
     /// The contextual menu never undoes typing, navigation or a new paste after the first one.
     #[test]
     fn another_edit_dismisses_paste_options() {
-        let mut app = WordApp::new(
-            wordcraft_engine::Session::new(wordcraft_doc::Document::new()),
-            crate::Services::default(),
-        );
+        let mut app = WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::new()), crate::Services::default());
         app.run("edit.paste", json!({"text": "pasted"})).unwrap();
         assert!(app.paste_options.is_some());
         app.run("text.insert", json!({"text": "!"})).unwrap();
@@ -234,10 +228,7 @@ mod tests {
     /// The Advanced setting applies to the normal Paste shortcut without changing clipboard text.
     #[test]
     fn saved_paste_mode_is_used_for_next_text_paste() {
-        let mut app = WordApp::new(
-            wordcraft_engine::Session::new(wordcraft_doc::Document::new()),
-            crate::Services::default(),
-        );
+        let mut app = WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::new()), crate::Services::default());
         app.ui.default_paste = "merge".into();
         app.run("edit.paste", json!({"text": "hello"})).unwrap();
         assert!(app.paste_options.as_ref().is_some_and(|p| p.mode == PasteMode::Merge));
