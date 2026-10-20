@@ -1215,6 +1215,148 @@ fn home(app: &mut WordApp, ui: &mut Ui) {
     });
 }
 
+/// Word-like shape selector groups the already implemented shapes into a compact picture grid.
+/// Each entry retains the exact \`insert.shape\` command parameters used by the old text menu.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ShapeGroup {
+    Lines,
+    Shapes,
+    Arrows,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ShapeChoice {
+    icon: &'static str,
+    label: &'static str,
+    kind: &'static str,
+    arrow: &'static str,
+    group: ShapeGroup,
+}
+
+impl ShapeChoice {
+    fn params(self) -> Value {
+        if self.arrow.is_empty() {
+            json!({"kind": self.kind})
+        } else {
+            json!({"kind": self.kind, "arrow": self.arrow})
+        }
+    }
+}
+
+/// These are the same fifteen insertions as the original menu, not additional unsupported shapes.
+const SHAPE_CHOICES: &[ShapeChoice] = &[
+    ShapeChoice { icon: "line", label: "Line", kind: "line", arrow: "", group: ShapeGroup::Lines },
+    ShapeChoice { icon: "straightConnector", label: "Straight Connector", kind: "straightConnector", arrow: "none", group: ShapeGroup::Lines },
+    ShapeChoice { icon: "elbowConnector", label: "Elbow Connector", kind: "elbowConnector", arrow: "none", group: ShapeGroup::Lines },
+    ShapeChoice { icon: "curvedConnector", label: "Curved Connector", kind: "curvedConnector", arrow: "none", group: ShapeGroup::Lines },
+    ShapeChoice { icon: "rectangle", label: "Rectangle", kind: "rectangle", arrow: "", group: ShapeGroup::Shapes },
+    ShapeChoice { icon: "roundedRectangle", label: "Rounded Rectangle", kind: "roundedRectangle", arrow: "", group: ShapeGroup::Shapes },
+    ShapeChoice { icon: "ellipse", label: "Oval", kind: "ellipse", arrow: "", group: ShapeGroup::Shapes },
+    ShapeChoice { icon: "triangle", label: "Triangle", kind: "triangle", arrow: "", group: ShapeGroup::Shapes },
+    ShapeChoice { icon: "diamond", label: "Diamond", kind: "diamond", arrow: "", group: ShapeGroup::Shapes },
+    ShapeChoice { icon: "star", label: "Star", kind: "star", arrow: "", group: ShapeGroup::Shapes },
+    ShapeChoice { icon: "heart", label: "Heart", kind: "heart", arrow: "", group: ShapeGroup::Shapes },
+    ShapeChoice { icon: "arrow", label: "Arrow", kind: "arrow", arrow: "", group: ShapeGroup::Arrows },
+    ShapeChoice { icon: "straightArrowConnector", label: "Straight Arrow Connector", kind: "straightConnector", arrow: "end", group: ShapeGroup::Arrows },
+    ShapeChoice { icon: "elbowArrowConnector", label: "Elbow Arrow Connector", kind: "elbowConnector", arrow: "end", group: ShapeGroup::Arrows },
+    ShapeChoice { icon: "curvedArrowConnector", label: "Curved Arrow Connector", kind: "curvedConnector", arrow: "end", group: ShapeGroup::Arrows },
+];
+
+const MAX_RECENT_SHAPES: usize = 8;
+
+/// Store only known shape ids, most recently inserted first; this is persisted in UI preferences.
+fn remember_shape(list: &mut Vec<String>, icon: &str) {
+    if !SHAPE_CHOICES.iter().any(|shape| shape.icon == icon) {
+        return;
+    }
+    list.retain(|old| old != icon);
+    list.insert(0, icon.to_owned());
+    list.truncate(MAX_RECENT_SHAPES);
+}
+
+/// One accessible icon-only button, with hover feedback and a translated shape name in its tooltip.
+fn shape_tile(ui: &mut Ui, app: &mut WordApp, choice: ShapeChoice) {
+    let enabled = crate::widgets::enabled(app, "insert.shape");
+    let response = ui
+        .add_enabled_ui(enabled, |ui| {
+            let t = Tokens::get(ui.ctx());
+            let (rect, response) = ui.allocate_exact_size(vec2(38.0, 36.0), Sense::click());
+            response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!(choice.label)));
+            if response.hovered() {
+                ui.painter().rect_filled(rect.shrink(1.0), egui::CornerRadius::same(4), t.hover);
+                ui.painter().rect_stroke(
+                    rect.shrink(1.0),
+                    egui::CornerRadius::same(4),
+                    Stroke::new(1.0, t.border),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            let color = if enabled { t.icon } else { t.text_disabled };
+            let accent = if enabled { t.accent } else { t.text_disabled };
+            icons::paint(
+                ui.painter(),
+                Rect::from_center_size(rect.center(), vec2(24.0, 24.0)),
+                &format!("shape.{}", choice.icon),
+                color,
+                accent,
+            );
+            response.on_hover_text(tl!(choice.label))
+        })
+        .inner;
+    if response.clicked() && app.run("insert.shape", choice.params()).is_ok() {
+        remember_shape(&mut app.ui.recent_shapes, choice.icon);
+        app.canvas.want_focus = true;
+        ui.close();
+    }
+}
+
+/// Lay out tiles in eight columns, with no text labels taking space inside the grid.
+fn shape_tiles(ui: &mut Ui, app: &mut WordApp, shapes: &[ShapeChoice], id: &str) {
+    egui::Grid::new(id).num_columns(8).spacing(vec2(2.0, 2.0)).show(ui, |ui| {
+        for (i, choice) in shapes.iter().copied().enumerate() {
+            shape_tile(ui, app, choice);
+            if i % 8 == 7 {
+                ui.end_row();
+            }
+        }
+        if !shapes.len().is_multiple_of(8) {
+            ui.end_row();
+        }
+    });
+}
+
+/// Insert › Shapes: a category-based visual gallery with a capped recent list and fixed footer.
+/// It changes only the picker; the engine, icons and DOCX serialization remain untouched.
+fn shapes_gallery(ui: &mut Ui, app: &mut WordApp) {
+    ui.set_min_width(338.0);
+    let recent: Vec<ShapeChoice> = app
+        .ui
+        .recent_shapes
+        .iter()
+        .take(MAX_RECENT_SHAPES)
+        .filter_map(|id| SHAPE_CHOICES.iter().find(|shape| shape.icon == id).copied())
+        .collect();
+    egui::ScrollArea::vertical().id_salt("insert_shapes_gallery").max_height(340.0).show(ui, |ui| {
+        if !recent.is_empty() {
+            ui.label(egui::RichText::new(tl!("Recent")).font(semibold(11.5)));
+            shape_tiles(ui, app, &recent, "recent_shapes_grid");
+            ui.separator();
+        }
+        for (group, title, id) in [
+            (ShapeGroup::Lines, "Lines", "shape_lines_grid"),
+            (ShapeGroup::Shapes, "Shapes", "shape_basics_grid"),
+            (ShapeGroup::Arrows, "Arrows", "shape_arrows_grid"),
+        ] {
+            ui.label(egui::RichText::new(tl!(title)).font(semibold(11.5)));
+            let shapes: Vec<ShapeChoice> = SHAPE_CHOICES.iter().filter(|shape| shape.group == group).copied().collect();
+            shape_tiles(ui, app, &shapes, id);
+            ui.add_space(5.0);
+        }
+    });
+    ui.separator();
+    mi_icon(ui, app, "canvas", "New Drawing Canvas", "insert.canvas", json!({}));
+}
+
 fn insert(app: &mut WordApp, ui: &mut Ui) {
     group(ui, "Pages", None, app, |ui, app| {
         stack(ui, |ui| {
@@ -1242,35 +1384,7 @@ fn insert(app: &mut WordApp, ui: &mut Ui) {
     });
     group(ui, "Illustrations", None, app, |ui, app| {
         big(ui, app, "picture", "Pictures", "insert.picture", json!({}), false);
-        menu_button(ui, app, "shapes", Some("Shapes"), "Shapes", true, "insert.shape", |ui, app| {
-            for (l, k) in [
-                ("Rectangle", "rectangle"),
-                ("Rounded Rectangle", "roundedRectangle"),
-                ("Oval", "ellipse"),
-                ("Triangle", "triangle"),
-                ("Diamond", "diamond"),
-                ("Line", "line"),
-                ("Arrow", "arrow"),
-                ("Star", "star"),
-                ("Heart", "heart"),
-            ] {
-                mi_icon(ui, app, &format!("shape.{k}"), l, "insert.shape", json!({"kind": k}));
-            }
-            ui.separator();
-            mi_icon(ui, app, "canvas", "New Drawing Canvas", "insert.canvas", json!({}));
-            // Connectors: glue their ends to shapes by dragging them (shape.connect).
-            for (l, k, arrow) in [
-                ("Straight Connector", "straightConnector", "none"),
-                ("Straight Arrow Connector", "straightConnector", "end"),
-                ("Elbow Connector", "elbowConnector", "none"),
-                ("Elbow Arrow Connector", "elbowConnector", "end"),
-                ("Curved Connector", "curvedConnector", "none"),
-                ("Curved Arrow Connector", "curvedConnector", "end"),
-            ] {
-                let icon = if arrow == "end" { k.replace("Connector", "ArrowConnector") } else { k.to_string() };
-                mi_icon(ui, app, &format!("shape.{icon}"), l, "insert.shape", json!({"kind": k, "arrow": arrow}));
-            }
-        });
+        menu_button(ui, app, "shapes", Some("Shapes"), "Shapes", true, "insert.shape", shapes_gallery);
         stack(ui, |ui| {
             small(ui, app, "icons", Some("Icons"), "Icons", "insert.icon", json!({}), false);
             small(ui, app, "smartArt", Some("SmartArt"), "SmartArt", "insert.smartArt", json!({}), false);
