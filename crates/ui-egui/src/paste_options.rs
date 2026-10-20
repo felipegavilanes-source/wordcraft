@@ -3,7 +3,7 @@
 //! It follows the pasted text while scrolling/zooming. Switching styles replays **only**
 //! the immediately preceding paste, using the source captured at insertion time.
 
-use egui::{Align2, Order, Pos2, vec2};
+use egui::{Order, Pos2, vec2};
 use serde_json::{Value, json};
 use wordcraft_doc::Pos;
 
@@ -145,11 +145,11 @@ pub fn show(app: &mut WordApp, ctx: &egui::Context) {
         return;
     }
     let Some((caret, height)) = crate::canvas::caret_screen(app) else { return };
-    let viewport = app.canvas.viewport.unwrap_or_else(|| ctx.screen_rect());
+    let viewport = app.canvas.viewport.unwrap_or_else(|| ctx.content_rect());
     if !viewport.contains(caret) {
         return; // Keep its document anchor while scrolled away.
     }
-    let at = at_caret(caret, height, viewport.intersect(ctx.screen_rect()));
+    let at = at_caret(caret, height, viewport.intersect(ctx.content_rect()));
     egui::Area::new(egui::Id::new("post_paste_options")).order(Order::Foreground).fixed_pos(at).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
             ui.menu_button("📋 ▾", |ui| {
