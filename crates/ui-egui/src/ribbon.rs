@@ -1235,11 +1235,7 @@ struct ShapeChoice {
 
 impl ShapeChoice {
     fn params(self) -> Value {
-        if self.arrow.is_empty() {
-            json!({"kind": self.kind})
-        } else {
-            json!({"kind": self.kind, "arrow": self.arrow})
-        }
+        if self.arrow.is_empty() { json!({"kind": self.kind}) } else { json!({"kind": self.kind, "arrow": self.arrow}) }
     }
 }
 
@@ -1257,7 +1253,13 @@ const SHAPE_CHOICES: &[ShapeChoice] = &[
     ShapeChoice { icon: "star", label: "Star", kind: "star", arrow: "", group: ShapeGroup::Shapes },
     ShapeChoice { icon: "heart", label: "Heart", kind: "heart", arrow: "", group: ShapeGroup::Shapes },
     ShapeChoice { icon: "arrow", label: "Arrow", kind: "arrow", arrow: "", group: ShapeGroup::Arrows },
-    ShapeChoice { icon: "straightArrowConnector", label: "Straight Arrow Connector", kind: "straightConnector", arrow: "end", group: ShapeGroup::Arrows },
+    ShapeChoice {
+        icon: "straightArrowConnector",
+        label: "Straight Arrow Connector",
+        kind: "straightConnector",
+        arrow: "end",
+        group: ShapeGroup::Arrows,
+    },
     ShapeChoice { icon: "elbowArrowConnector", label: "Elbow Arrow Connector", kind: "elbowConnector", arrow: "end", group: ShapeGroup::Arrows },
     ShapeChoice { icon: "curvedArrowConnector", label: "Curved Arrow Connector", kind: "curvedConnector", arrow: "end", group: ShapeGroup::Arrows },
 ];
@@ -1284,22 +1286,11 @@ fn shape_tile(ui: &mut Ui, app: &mut WordApp, choice: ShapeChoice) {
             response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!(choice.label)));
             if response.hovered() {
                 ui.painter().rect_filled(rect.shrink(1.0), egui::CornerRadius::same(4), t.hover);
-                ui.painter().rect_stroke(
-                    rect.shrink(1.0),
-                    egui::CornerRadius::same(4),
-                    Stroke::new(1.0, t.border),
-                    egui::StrokeKind::Inside,
-                );
+                ui.painter().rect_stroke(rect.shrink(1.0), egui::CornerRadius::same(4), Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
             }
             let color = if enabled { t.icon } else { t.text_disabled };
             let accent = if enabled { t.accent } else { t.text_disabled };
-            icons::paint(
-                ui.painter(),
-                Rect::from_center_size(rect.center(), vec2(24.0, 24.0)),
-                &format!("shape.{}", choice.icon),
-                color,
-                accent,
-            );
+            icons::paint(ui.painter(), Rect::from_center_size(rect.center(), vec2(24.0, 24.0)), &format!("shape.{}", choice.icon), color, accent);
             response.on_hover_text(tl!(choice.label))
         })
         .inner;
@@ -1329,13 +1320,8 @@ fn shape_tiles(ui: &mut Ui, app: &mut WordApp, shapes: &[ShapeChoice], id: &str)
 /// It changes only the picker; the engine, icons and DOCX serialization remain untouched.
 fn shapes_gallery(ui: &mut Ui, app: &mut WordApp) {
     ui.set_min_width(338.0);
-    let recent: Vec<ShapeChoice> = app
-        .ui
-        .recent_shapes
-        .iter()
-        .take(MAX_RECENT_SHAPES)
-        .filter_map(|id| SHAPE_CHOICES.iter().find(|shape| shape.icon == id).copied())
-        .collect();
+    let recent: Vec<ShapeChoice> =
+        app.ui.recent_shapes.iter().take(MAX_RECENT_SHAPES).filter_map(|id| SHAPE_CHOICES.iter().find(|shape| shape.icon == id).copied()).collect();
     egui::ScrollArea::vertical().id_salt("insert_shapes_gallery").max_height(340.0).show(ui, |ui| {
         if !recent.is_empty() {
             ui.label(egui::RichText::new(tl!("Recent")).font(semibold(11.5)));
@@ -3050,10 +3036,11 @@ mod tests {
             assert!(ids.insert(shape.icon), "repeated icon {}", shape.icon);
             let mut session = Session::new(wordcraft_doc::Document::new());
             session.run("insert.shape", &shape.params()).unwrap();
-            assert!(matches!(
-                wordcraft_engine::cmd::objects::selected(&session),
-                Some((_, wordcraft_doc::para::InlineObject::Shape { .. }))
-            ), "not inserted: {}", shape.label);
+            assert!(
+                matches!(wordcraft_engine::cmd::objects::selected(&session), Some((_, wordcraft_doc::para::InlineObject::Shape { .. }))),
+                "not inserted: {}",
+                shape.label
+            );
         }
         assert_eq!(SHAPE_CHOICES.iter().filter(|choice| choice.group == ShapeGroup::Lines).count(), 4);
         assert_eq!(SHAPE_CHOICES.iter().filter(|choice| choice.group == ShapeGroup::Shapes).count(), 7);
@@ -3083,21 +3070,15 @@ mod tests {
     fn shapes_gallery_click_inserts_shape_and_remembers_it() {
         use egui_kittest::kittest::Queryable;
         let app = WordApp::new(Session::new(wordcraft_doc::Document::new()), crate::Services::default());
-        let mut h = egui_kittest::Harness::builder()
-            .with_size(vec2(420.0, 600.0))
-            .build_ui_state(|ui, app: &mut WordApp| shapes_gallery(ui, app), app);
+        let mut h =
+            egui_kittest::Harness::builder().with_size(vec2(420.0, 600.0)).build_ui_state(|ui, app: &mut WordApp| shapes_gallery(ui, app), app);
         h.run_steps(3);
         h.get_by_label("Rectangle").click();
         h.run_steps(2);
         assert_eq!(h.state().ui.recent_shapes, vec!["rectangle"]);
-        assert!(matches!(
-            wordcraft_engine::cmd::objects::selected(&h.state().session),
-            Some((_, wordcraft_doc::para::InlineObject::Shape { .. }))
-        ));
+        assert!(matches!(wordcraft_engine::cmd::objects::selected(&h.state().session), Some((_, wordcraft_doc::para::InlineObject::Shape { .. }))));
         assert!(h.query(egui_kittest::kittest::By::new().label_contains("New Drawing Canvas")).is_some());
     }
-
-
 
     /// Two clicks arm and disarm the painter; the double-click handling then leaves it sticky (#2785).
     #[test]
