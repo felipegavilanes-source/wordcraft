@@ -185,7 +185,9 @@ pub fn show(app: &mut WordApp, ctx: &egui::Context) {
     let at = at_caret(caret, height, viewport.intersect(ctx.content_rect()));
     egui::Area::new(egui::Id::new("post_paste_options")).order(Order::Foreground).fixed_pos(at).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
-            ui.menu_button(tl!("Paste"), |ui| {
+            let shortcut = if ctx.os() == egui::os::OperatingSystem::Mac { "⌘" } else { "Ctrl" };
+            // Clipboard symbol and shortcut beside the end of the newly pasted text, as in Word.
+            let menu = ui.menu_button(format!("     ({shortcut}) ▾"), |ui| {
                 ui.label(egui::RichText::new(tl!("Paste as:")).strong());
                 ui.horizontal(|ui| {
                     for mode in [PasteMode::Source, PasteMode::Merge, PasteMode::Text] {
@@ -204,6 +206,15 @@ pub fn show(app: &mut WordApp, ctx: &egui::Context) {
                     ui.close();
                 }
             });
+            menu.response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tl!("Paste")));
+            let t = crate::theme::Tokens::get(ui.ctx());
+            crate::icons::paint(
+                ui.painter(),
+                egui::Rect::from_center_size(menu.response.rect.left_center() + vec2(12.0, 0.0), vec2(17.0, 17.0)),
+                "paste",
+                t.icon,
+                t.accent,
+            );
         });
     });
 }
