@@ -142,27 +142,26 @@ fn paste_mode_tile(ui: &mut egui::Ui, mode: PasteMode, selected: bool) -> egui::
     let (rect, response) = ui.allocate_exact_size(vec2(48.0, 40.0), egui::Sense::click());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!(mode.label())));
     let t = crate::theme::Tokens::get(ui.ctx());
-    let bg = if selected { t.checked } else if response.hovered() { t.hover } else { t.balloon };
+    let bg = if selected {
+        t.checked
+    } else if response.hovered() {
+        t.hover
+    } else {
+        t.balloon
+    };
     ui.painter().rect_filled(rect.shrink(1.0), 4.0, bg);
     if selected || response.hovered() {
-        ui.painter().rect_stroke(
-            rect.shrink(1.0),
-            4.0,
-            egui::Stroke::new(1.0, if selected { t.accent } else { t.border }),
-            egui::StrokeKind::Inside,
-        );
+        ui.painter().rect_stroke(rect.shrink(1.0), 4.0, egui::Stroke::new(1.0, if selected { t.accent } else { t.border }), egui::StrokeKind::Inside);
     }
-    crate::icons::paint(
-        ui.painter(),
-        egui::Rect::from_center_size(rect.center() - vec2(5.0, 0.0), vec2(25.0, 25.0)),
-        "paste",
-        t.icon,
-        t.accent,
-    );
+    crate::icons::paint(ui.painter(), egui::Rect::from_center_size(rect.center() - vec2(5.0, 0.0), vec2(25.0, 25.0)), "paste", t.icon, t.accent);
     ui.painter().text(
         rect.center() + vec2(14.0, 10.0),
         egui::Align2::CENTER_CENTER,
-        match mode { PasteMode::Source => "S", PasteMode::Merge => "M", PasteMode::Text => "A" },
+        match mode {
+            PasteMode::Source => "S",
+            PasteMode::Merge => "M",
+            PasteMode::Text => "A",
+        },
         egui::FontId::proportional(11.0),
         t.text,
     );
