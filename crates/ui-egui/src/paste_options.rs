@@ -136,6 +136,39 @@ fn at_caret(caret: Pos2, height: f32, viewport: egui::Rect) -> Pos2 {
     Pos2::new(x, y)
 }
 
+/// Paint one accessible, Word-like icon tile with the clipboard pictogram and a small
+/// formatting marker. Unlike the ribbon's text menu, the three options fit side by side.
+fn paste_mode_tile(ui: &mut egui::Ui, mode: PasteMode, selected: bool) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(vec2(48.0, 40.0), egui::Sense::click());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), tl!(mode.label())));
+    let t = crate::theme::Tokens::get(ui.ctx());
+    let bg = if selected { t.checked } else if response.hovered() { t.hover } else { t.balloon };
+    ui.painter().rect_filled(rect.shrink(1.0), 4.0, bg);
+    if selected || response.hovered() {
+        ui.painter().rect_stroke(
+            rect.shrink(1.0),
+            4.0,
+            egui::Stroke::new(1.0, if selected { t.accent } else { t.border }),
+            egui::StrokeKind::Inside,
+        );
+    }
+    crate::icons::paint(
+        ui.painter(),
+        egui::Rect::from_center_size(rect.center() - vec2(5.0, 0.0), vec2(25.0, 25.0)),
+        "paste",
+        t.icon,
+        t.accent,
+    );
+    ui.painter().text(
+        rect.center() + vec2(14.0, 10.0),
+        egui::Align2::CENTER_CENTER,
+        match mode { PasteMode::Source => "S", PasteMode::Merge => "M", PasteMode::Text => "A" },
+        egui::FontId::proportional(11.0),
+        t.text,
+    );
+    response.on_hover_text(tl!(mode.label()))
+}
+
 /// Paint the paste button and its three paste modes in a foreground pop-up over the document.
 /// Moving the caret, editing again, closing the document or opening another dialog removes it.
 pub fn show(app: &mut WordApp, ctx: &egui::Context) {
@@ -157,17 +190,7 @@ pub fn show(app: &mut WordApp, ctx: &egui::Context) {
                 ui.horizontal(|ui| {
                     for mode in [PasteMode::Source, PasteMode::Merge, PasteMode::Text] {
                         let selected = app.paste_options.as_ref().is_some_and(|p| p.mode == mode);
-                        let resp = ui
-                            .add(
-                                egui::Button::new(match mode {
-                                    PasteMode::Source => "S",
-                                    PasteMode::Merge => "M",
-                                    PasteMode::Text => "A",
-                                })
-                                .selected(selected)
-                                .min_size(vec2(42.0, 32.0)),
-                            )
-                            .on_hover_text(tl!(mode.label()));
+                        let resp = paste_mode_tile(ui, mode, selected);
                         if resp.clicked() {
                             switch(app, mode);
                             ui.close();
