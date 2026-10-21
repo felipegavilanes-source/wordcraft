@@ -152,7 +152,7 @@ pub fn show(app: &mut WordApp, ctx: &egui::Context) {
     let at = at_caret(caret, height, viewport.intersect(ctx.content_rect()));
     egui::Area::new(egui::Id::new("post_paste_options")).order(Order::Foreground).fixed_pos(at).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
-            ui.menu_button("📋 ▾", |ui| {
+            ui.menu_button("Paste", |ui| {
                 ui.label(egui::RichText::new(tl!("Paste as:")).strong());
                 ui.horizontal(|ui| {
                     for mode in [PasteMode::Source, PasteMode::Merge, PasteMode::Text] {
@@ -160,8 +160,8 @@ pub fn show(app: &mut WordApp, ctx: &egui::Context) {
                         let resp = ui
                             .add(
                                 egui::Button::new(match mode {
-                                    PasteMode::Source => "▣",
-                                    PasteMode::Merge => "▤",
+                                    PasteMode::Source => "S",
+                                    PasteMode::Merge => "M",
                                     PasteMode::Text => "A",
                                 })
                                 .selected(selected)
@@ -222,7 +222,7 @@ mod tests {
         app.run("text.insert", json!({"text": "!"})).unwrap();
         assert!(app.paste_options.is_none());
         switch(&mut app, PasteMode::Merge);
-        assert_eq!(app.session.doc.plain_text(wordcraft_doc::StoryRef::Body), "pasted!");
+        assert_eq!(app.session.doc.plain_text(wordcraft_doc::StoryRef::Body), "Pasted!");
     }
 
     /// The Advanced setting applies to the normal Paste shortcut without changing clipboard text.
