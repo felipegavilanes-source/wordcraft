@@ -152,7 +152,7 @@ pub fn show(app: &mut WordApp, ctx: &egui::Context) {
     let at = at_caret(caret, height, viewport.intersect(ctx.content_rect()));
     egui::Area::new(egui::Id::new("post_paste_options")).order(Order::Foreground).fixed_pos(at).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
-            ui.menu_button("Paste", |ui| {
+            ui.menu_button(tl!("Paste"), |ui| {
                 ui.label(egui::RichText::new(tl!("Paste as:")).strong());
                 ui.horizontal(|ui| {
                     for mode in [PasteMode::Source, PasteMode::Merge, PasteMode::Text] {
