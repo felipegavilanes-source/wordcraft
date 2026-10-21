@@ -3073,8 +3073,8 @@ mod tests {
         let mut h =
             egui_kittest::Harness::builder().with_size(vec2(420.0, 600.0)).build_ui_state(|ui, app: &mut WordApp| shapes_gallery(ui, app), app);
         // This isolated UI harness does not go through the normal WordApp frame setup,
-        // so install the app's named medium/semibold font families before painting.
-        crate::theme::install_fonts(&h.ctx);
+        // so register the app's named medium/semibold font families before painting.
+        h.ctx.set_fonts(crate::theme::font_definitions(false, false));
         h.run_steps(3);
         h.get_by_label("Rectangle").click();
         h.run_steps(2);
