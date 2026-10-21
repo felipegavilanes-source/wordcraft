@@ -3070,11 +3070,19 @@ mod tests {
     fn shapes_gallery_click_inserts_shape_and_remembers_it() {
         use egui_kittest::kittest::Queryable;
         let app = WordApp::new(Session::new(wordcraft_doc::Document::new()), crate::Services::default());
-        // build_ui_state renders its first frame immediately, so install the named
-        // fonts before the gallery paints anything (not after harness creation).
+        // egui applies set_fonts on the *next* frame. A kittest harness paints its
+        // first frame inside build_ui_state, so render a font-setup frame without
+        // the gallery. The following frames exercise the real UI, including its
+        // named semibold fonts, as the desktop app does after startup.
+        let mut first_frame = true;
         let mut h = egui_kittest::Harness::builder().with_size(vec2(420.0, 600.0)).build_ui_state(
-            |ui, app: &mut WordApp| {
-                ui.ctx().set_fonts(crate::theme::font_definitions(false, false));
+            move |ui, app: &mut WordApp| {
+                if first_frame {
+                    ui.ctx().set_fonts(crate::theme::font_definitions(false, false));
+                    ui.ctx().request_repaint();
+                    first_frame = false;
+                    return;
+                }
                 shapes_gallery(ui, app);
             },
             app,
