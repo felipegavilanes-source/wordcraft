@@ -3070,11 +3070,15 @@ mod tests {
     fn shapes_gallery_click_inserts_shape_and_remembers_it() {
         use egui_kittest::kittest::Queryable;
         let app = WordApp::new(Session::new(wordcraft_doc::Document::new()), crate::Services::default());
-        let mut h =
-            egui_kittest::Harness::builder().with_size(vec2(420.0, 600.0)).build_ui_state(|ui, app: &mut WordApp| shapes_gallery(ui, app), app);
-        // This isolated UI harness does not go through the normal WordApp frame setup,
-        // so register the app's named medium/semibold font families before painting.
-        h.ctx.set_fonts(crate::theme::font_definitions(false, false));
+        // build_ui_state renders its first frame immediately, so install the named
+        // fonts before the gallery paints anything (not after harness creation).
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(420.0, 600.0)).build_ui_state(
+            |ui, app: &mut WordApp| {
+                ui.ctx().set_fonts(crate::theme::font_definitions(false, false));
+                shapes_gallery(ui, app);
+            },
+            app,
+        );
         h.run_steps(3);
         h.get_by_label("Rectangle").click();
         h.run_steps(2);
