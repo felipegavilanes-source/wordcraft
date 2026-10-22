@@ -59,22 +59,22 @@ pub struct PostPaste {
     document: u64,
     caret: Pos,
     revision: u64,
-    undo_depth: usize,
+    undo_steps: u64,
 }
 
 impl PostPaste {
     /// Remember a paste once the engine finished applying it.
-    pub fn capture(app: &WordApp, mut params: Value, mode: PasteMode, undo_before: usize) -> Option<Self> {
-        if app.session.undo_depth() <= undo_before {
+    pub fn capture(app: &WordApp, mut params: Value, mode: PasteMode, undo_before: u64) -> Option<Self> {
+        if app.session.undo_steps_so_far() <= undo_before {
             return None;
         }
-        // An in-app rich fragment sometimes has no system text callback. Capture its plain-text
-        // counterpart so Keep Text Only can reapply the same clipboard contents later.
+        // In-app rich fragments may not supply system text. Store the clipboard's exact
+        // text representation so switching back to source can recognize that fragment.
         if params.get("text").is_none()
             && let Some(fragment) = app.session.clipboard.as_ref()
             && let Some(obj) = params.as_object_mut()
         {
-            obj.insert("text".into(), Value::String(fragment.plain_text()));
+            obj.insert("text".into(), Value::String(fragment.clipboard_text()));
         }
         Some(Self {
             params,
@@ -82,14 +82,14 @@ impl PostPaste {
             document: app.session.document_id(),
             caret: app.session.sel.focus.clone(),
             revision: app.session.rev(),
-            undo_depth: app.session.undo_depth(),
+            undo_steps: app.session.undo_steps_so_far(),
         })
     }
 
     /// A paste is replaceable only while it remains the most recent, untouched edit.
     pub fn current(&self, app: &WordApp) -> bool {
         self.document == app.session.document_id()
-            && self.undo_depth == app.session.undo_depth()
+            && self.undo_steps == app.session.undo_steps_so_far()
             && self.revision == app.session.rev()
             && self.caret == app.session.sel.focus
     }
@@ -117,7 +117,7 @@ pub fn switch(app: &mut WordApp, mode: PasteMode) {
     if app.execute_user("edit.undo", json!({})).is_err() {
         return;
     }
-    let before = app.session.undo_depth();
+    let before = app.session.undo_steps_so_far();
     if let Err(err) = app.execute_user(mode.command(), saved.params.clone()) {
         // The original paste remains available as Redo when a replacement fails.
         let _ = app.execute_user("edit.redo", json!({}));
