@@ -288,10 +288,7 @@ mod tests {
     fn captured_rich_paste_uses_clipboard_text_for_symbol_fonts() {
         let mut app = WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::new()), crate::Services::default());
         app.run("document.setText", json!({"text": "ok J\u{F0FC}"})).unwrap();
-        app.session
-            .doc
-            .format_range(&Pos::body(0, 3), &Pos::body(0, 7), &|c| c.font = Some("Wingdings".into()))
-            .unwrap();
+        app.session.doc.format_range(&Pos::body(0, 3), &Pos::body(0, 7), &|c| c.font = Some("Wingdings".into())).unwrap();
         app.run("select.all", json!({})).unwrap();
         app.run("edit.copy", json!({})).unwrap();
         let fragment = app.session.clipboard.as_ref().unwrap();
