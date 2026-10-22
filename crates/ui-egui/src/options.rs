@@ -472,7 +472,7 @@ fn advanced(app: &mut WordApp, ui: &mut Ui) {
             .show_ui(ui, |ui| {
                 for (key, label) in [("source", "Paste"), ("merge", "Merge Formatting"), ("text", "Keep Text Only")] {
                     if ui.selectable_label(current.key() == key, tl!(label)).clicked() {
-                        app.ui.default_paste = key.to_owned();
+                        let _ = app.run("ui.defaultPaste", json!({"value": key}));
                     }
                 }
             });
