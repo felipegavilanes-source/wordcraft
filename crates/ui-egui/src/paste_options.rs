@@ -270,6 +270,33 @@ mod tests {
         assert_eq!(restored.default_paste, "merge");
     }
 
+    /// The option is available as a command, including without an open document.
+    #[test]
+    fn default_paste_setting_uses_a_validated_ui_command() {
+        let mut app = WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::new()), crate::Services::default());
+        assert!(crate::works_without_document("ui.defaultPaste"));
+        assert_eq!(app.run("ui.defaultPaste", json!({})).unwrap(), json!({"defaultPaste": "source"}));
+        assert_eq!(app.run("ui.defaultPaste", json!({"value": "merge"})).unwrap(), json!({"defaultPaste": "merge"}));
+        assert!(app.run("ui.defaultPaste", json!({"value": "unknown"})).is_err());
+        assert!(app.run("ui.defaultPaste", json!({"value": 123})).is_err());
+        assert_eq!(app.run("ui.defaultPaste", json!({})).unwrap(), json!({"defaultPaste": "merge"}));
+    }
+
+    /// History is capped at 500 entries: inserting another paste still shows Paste Options.
+    #[test]
+    fn paste_options_survive_a_full_undo_history() {
+        let mut app = WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::new()), crate::Services::default());
+        for _ in 0..500 {
+            app.session.push_undo("earlier edit", app.session.doc.clone(), app.session.sel.clone());
+        }
+        let before = app.session.undo_steps_so_far();
+        assert_eq!(app.session.undo_depth(), 500);
+        app.run("edit.paste", json!({"text": "new"})).unwrap();
+        assert_eq!(app.session.undo_depth(), 500);
+        assert_eq!(app.session.undo_steps_so_far(), before + 1);
+        assert!(app.paste_options.as_ref().is_some_and(|p| p.current(&app)));
+    }
+
     #[test]
     fn paste_modes_keep_the_existing_engine_commands() {
         assert_eq!(PasteMode::Source.command(), "edit.paste");
