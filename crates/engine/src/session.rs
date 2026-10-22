@@ -1004,7 +1004,7 @@ impl Session {
         self.redo.last().map(|u| u.label.as_str())
     }
     /// Undo steps pushed so far, evicted ones included: only grows while steps are added.
-    pub(crate) fn undo_steps_so_far(&self) -> u64 {
+    pub fn undo_steps_so_far(&self) -> u64 {
         self.history.len() as u64 + self.undo_evicted
     }
     /// The number of undo steps.
