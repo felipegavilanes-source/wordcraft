@@ -256,7 +256,10 @@ mod tests {
             let dest = s.doc.para_at(&Pos::body(0, 0)).unwrap();
             let revision = dest.runs[0].props.ins;
             assert_eq!(s.doc.move_name(revision), Some("move1"), "{command}: destination must be marked as a move");
-            assert!(s.doc.revisions.iter().filter(|r| r.move_name.as_deref() == Some("move1")).count() >= 2, "{command}: both ends must share a move name");
+            assert!(
+                s.doc.revisions.iter().filter(|r| r.move_name.as_deref() == Some("move1")).count() >= 2,
+                "{command}: both ends must share a move name"
+            );
         }
     }
 
