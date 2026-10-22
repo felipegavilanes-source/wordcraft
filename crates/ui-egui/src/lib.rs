@@ -899,11 +899,7 @@ impl WordApp {
         let is_paste = matches!(id, "edit.paste" | "edit.pasteMerge" | "edit.pasteText");
         // Only text paste follows the saved default; picture paste remains the regular command.
         let mode = if id == "edit.paste" {
-            paste_options::PasteMode::from_key(if params.get("text").and_then(Value::as_str).is_some_and(|text| !text.is_empty()) {
-                &self.ui.default_paste
-            } else {
-                "source"
-            })
+            paste_options::PasteMode::from_key(&self.ui.default_paste)
         } else if id == "edit.pasteMerge" {
             paste_options::PasteMode::Merge
         } else {
@@ -911,7 +907,7 @@ impl WordApp {
         };
         let effective_id = if is_paste { mode.command() } else { id };
         let paste_params = is_paste.then(|| params.clone());
-        let undo_before = self.session.undo_depth();
+        let undo_before = self.session.undo_steps_so_far();
         let applied = applied_font(id, &params);
         let r = self.execute_user(effective_id, params);
         if r.is_ok()
@@ -1714,6 +1710,17 @@ impl WordApp {
             "ui.discord" => {
                 self.canvas.open_url = Some("https://discord.gg/artcraft".into());
                 json!({})
+            }
+            "ui.defaultPaste" => {
+                // File > Options > Advanced: all UI preferences are queryable commands.
+                match p.get("value") {
+                    None => {}
+                    Some(Value::String(v)) if matches!(v.as_str(), "source" | "merge" | "text") => {
+                        self.ui.default_paste = v.clone();
+                    }
+                    Some(_) => return Some(Err("`value` must be source, merge or text".into())),
+                }
+                json!({"defaultPaste": self.ui.default_paste})
             }
             "ui.caretAnimation" => {
                 // File › Options › Advanced › Animation: `value` true or false turns the caret's
@@ -2648,6 +2655,7 @@ pub(crate) fn works_without_document(id: &str) -> bool {
             | "ui.fileBrowser"
             | "ui.makeDefaultApp"
             | "ui.discord"
+            | "ui.defaultPaste"
             | "ui.caretAnimation"
             | "ui.startScreen"
     ) || id.starts_with("help.")
