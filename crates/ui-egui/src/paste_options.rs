@@ -282,6 +282,28 @@ mod tests {
         assert_eq!(app.run("ui.defaultPaste", json!({})).unwrap(), json!({"defaultPaste": "merge"}));
     }
 
+    /// Wingdings-style symbol text differs from its clipboard representation. Save the latter,
+    /// so changing paste style can still identify the original rich fragment.
+    #[test]
+    fn captured_rich_paste_uses_clipboard_text_for_symbol_fonts() {
+        let mut app = WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::new()), crate::Services::default());
+        app.run("document.setText", json!({"text": "ok J\u{F0FC}"})).unwrap();
+        app.session
+            .doc
+            .format_range(&Pos::body(0, 3), &Pos::body(0, 7), &|c| c.font = Some("Wingdings".into()))
+            .unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("edit.copy", json!({})).unwrap();
+        let fragment = app.session.clipboard.as_ref().unwrap();
+        let clipboard_text = fragment.clipboard_text();
+        assert_ne!(fragment.plain_text(), clipboard_text);
+        app.run("caret.docEnd", json!({})).unwrap();
+        let before = app.session.undo_steps_so_far();
+        app.run("edit.paste", json!({"text": clipboard_text})).unwrap();
+        let captured = PostPaste::capture(&app, json!({}), PasteMode::Source, before).unwrap();
+        assert_eq!(captured.params["text"], clipboard_text);
+    }
+
     /// History is capped at 500 entries: inserting another paste still shows Paste Options.
     #[test]
     fn paste_options_survive_a_full_undo_history() {
