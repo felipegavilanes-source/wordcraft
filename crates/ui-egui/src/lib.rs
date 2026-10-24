@@ -277,6 +277,10 @@ pub struct UiState {
     /// View › Navigation Pane: open or closed as the person left it, kept between runs (#2526).
     /// The session owns it while running (see [`WordApp::prefs`]).
     pub nav_pane: bool,
+    /// Home › Paragraph › Show/Hide ¶: show all formatting marks across documents and launches.
+    /// The session owns the live value; `WordApp::prefs` saves it as a user setting.
+    #[serde(default)]
+    pub show_formatting_marks: bool,
     /// Headings whose sub-headings the Navigation pane hides (#1997); per session, not saved.
     #[serde(skip)]
     pub nav_collapsed: std::collections::HashSet<wordcraft_doc::Path>,
@@ -394,6 +398,7 @@ impl Default for UiState {
             legacy_dark: None,
             nav_tab: "headings".into(),
             nav_pane: false,
+            show_formatting_marks: false,
             nav_collapsed: Default::default(),
             show_discord: true,
             author: String::new(),
@@ -805,6 +810,7 @@ impl WordApp {
         ui.read_aloud_skip_citations = self.session.read_aloud.skip_citations;
         ui.dark_page = self.session.view.dark_mode;
         ui.nav_pane = self.session.view.nav_pane;
+        ui.show_formatting_marks = self.session.view.marks;
         ui.check_spelling = self.session.view.proofing;
         ui.keyboard = self.session.keymap.clone();
         ui.ribbon = self.session.ribbon.clone();
@@ -853,6 +859,11 @@ impl WordApp {
         self.session.read_aloud.skip_citations = self.ui.read_aloud_skip_citations;
         self.session.view.dark_mode = self.ui.dark_page;
         self.session.view.nav_pane = self.ui.nav_pane;
+        // Formatting marks are a user preference, not a property of the document.
+        if self.session.view.marks != self.ui.show_formatting_marks {
+            self.session.view.marks = self.ui.show_formatting_marks;
+            self.session.relayout();
+        }
         self.session.view.proofing = self.ui.check_spelling;
         // Keys for commands this version doesn't have are dropped.
         self.session.keymap = std::mem::take(&mut self.ui.keyboard);
@@ -3662,6 +3673,39 @@ mod tests {
         b.run("file.open", json!({"path": path.to_string_lossy()})).unwrap();
         assert!(b.has_document());
         assert!(body_text(&b).contains("Signed copy"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The ¶ toggle is a display-only, app-wide preference, carried into new/opened documents
+    /// and restored from ui.json when WordCraft starts again.
+    #[test]
+    fn show_formatting_marks_is_remembered_across_documents_and_restarts() {
+        let mut a = app();
+        assert!(!a.session.view.marks, "off by default");
+        assert_eq!(a.run("view.marks", json!({"value": true})).unwrap()["value"], true);
+        assert!(a.session.view.marks);
+        assert!(!a.session.dirty, "showing marks must not change document contents");
+        a.run("file.new", json!({})).unwrap();
+        assert!(a.session.view.marks, "new documents retain the setting");
+
+        let saved = serde_json::to_vec(&a.prefs()).unwrap();
+        assert!(String::from_utf8_lossy(&saved).contains(r#""show_formatting_marks":true"#));
+        let mut b = app();
+        b.apply_prefs(UiState::from_json(&saved).unwrap());
+        assert!(b.session.view.marks, "preference is restored at startup");
+
+        let dir = scratch("show-formatting-marks");
+        let path = docx_on_disk(&dir, "Example");
+        b.run("file.open", json!({"path": path.to_string_lossy()})).unwrap();
+        assert!(b.session.view.marks, "opening another file does not turn marks off");
+        assert!(!b.session.dirty);
+
+        assert_eq!(b.run("view.marks", json!({"value": false})).unwrap()["value"], false);
+        assert!(!b.session.dirty, "hiding marks must not change document contents");
+        let mut c = app();
+        c.apply_prefs(UiState::from_json(&serde_json::to_vec(&b.prefs()).unwrap()).unwrap());
+        assert!(!c.session.view.marks, "turning marks off is saved too");
+        assert!(!UiState::from_json(br#"{}"#).unwrap().show_formatting_marks, "older settings default to off");
         let _ = std::fs::remove_dir_all(dir);
     }
 
