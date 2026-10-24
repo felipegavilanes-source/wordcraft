@@ -3689,7 +3689,7 @@ mod tests {
         assert!(a.session.view.marks, "new documents retain the setting");
 
         let saved = serde_json::to_vec(&a.prefs()).unwrap();
-        assert!(String::from_utf8_lossy(&saved).contains(r#""show_formatting_marks":true"#));
+        assert!(String::from_utf8_lossy(&saved).contains(r#""showFormattingMarks":true"#));
         let mut b = app();
         b.apply_prefs(UiState::from_json(&saved).unwrap());
         assert!(b.session.view.marks, "preference is restored at startup");
