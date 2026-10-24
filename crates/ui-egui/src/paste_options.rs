@@ -246,6 +246,28 @@ mod tests {
         assert!(app.paste_options.is_none());
     }
 
+    /// Replaying a tracked paste with another format must keep both ends of the move linked.
+    #[test]
+    fn changing_paste_format_preserves_tracked_move() {
+        for mode in [PasteMode::Merge, PasteMode::Text] {
+            let mut app = WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::new()), crate::Services::default());
+            app.run("document.setText", json!({"text": "First one.\\nSecond one.\\nThird one."})).unwrap();
+            app.run("file.setAuthor", json!({"name": "Ana"})).unwrap();
+            app.run("review.trackChanges", json!({"value": true})).unwrap();
+            app.run("select.range", json!({"anchor": {"block": 1, "off": 0}, "focus": {"block": 2, "off": 0}})).unwrap();
+            app.run("edit.cut", json!({})).unwrap();
+            app.run("caret.set", json!({"pos": {"block": 0, "off": 0}})).unwrap();
+            app.run("edit.paste", json!({})).unwrap();
+            assert!(app.paste_options.as_ref().is_some_and(|p| p.current(&app)), "original paste should offer a formatting choice");
+            switch(&mut app, mode);
+            let dest = app.session.doc.para_at(&wordcraft_doc::Pos::body(0, 0)).unwrap();
+            let move_name = app.session.doc.move_name(dest.runs[0].props.ins);
+            assert_eq!(move_name, Some("move1"), "{mode:?}: switching formatting must preserve the tracked move");
+            assert_eq!(app.session.doc.revisions.iter().filter(|r| r.move_name.as_deref() == Some("move1")).count(), 2);
+            assert!(app.paste_options.as_ref().is_some_and(|p| p.mode == mode));
+        }
+    }
+
     /// The contextual menu never undoes typing, navigation or a new paste after the first one.
     #[test]
     fn another_edit_dismisses_paste_options() {
