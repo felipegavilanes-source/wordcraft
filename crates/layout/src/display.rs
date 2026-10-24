@@ -2093,7 +2093,7 @@ mod paragraph_mark_color_tests {
         let red = Rgb(255, 0, 0);
         let yellow = Rgb(255, 215, 0);
         for (i, color) in [red, yellow].into_iter().enumerate() {
-            let p = doc.para_mut(StoryRef::Body, &Path::top(i as u32)).unwrap();
+            let p = doc.para_mut(StoryRef::Body, &Path::top(i)).unwrap();
             p.mark.color = Some(TextColor::Rgb(color));
         }
         // An automatic paragraph mark keeps the normal screen mark colour.
