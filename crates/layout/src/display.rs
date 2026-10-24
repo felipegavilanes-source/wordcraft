@@ -210,8 +210,8 @@ pub enum Draw {
     /// An inline chart, diagram or described shape's draws, as one figure with its alt text (for
     /// tagged PDF). `kind` is the graphic's, `None` for a shape (see [`crate::shape_figure_alt`]).
     Figure { alt: String, kind: Option<GraphicKind>, draws: Vec<Draw> },
-    /// A formatting mark (¶ · → ↵) in the UI's mark colour, or in `color` (a tracked
-    /// paragraph mark in its reviser's colour).
+    /// A formatting mark (¶ · → ↵) in the UI's mark colour, or its paragraph mark's
+    /// font colour. Tracked revisions take precedence over the font colour.
     Mark { x: f32, baseline: f32, size: f32, ch: char, color: Option<Rgb> },
     /// Turned text (a table cell's text direction): `items` are drawn in a frame turned `turn`
     /// whose origin is page point (`x`, `y`) (see [`crate::turn_point`]).
@@ -1419,6 +1419,17 @@ fn lines(
                     ),
                     _ => None,
                 });
+                // A paragraph mark has its own character formatting (which may inherit the
+                // paragraph style). Match Word: its ¶ uses that font colour, not the generic
+                // interface mark colour. Automatic colour keeps the existing UI fallback.
+                // Tracked-change colours take precedence over the font colour above.
+                let color = color.or_else(|| {
+                    let p = para?;
+                    match doc.styles.resolve_char(p.props.style.as_deref(), &p.mark).color {
+                        TextColor::Rgb(c) => Some(c),
+                        TextColor::Auto => None,
+                    }
+                });
                 // The last paragraph of a section ends in a section break instead of a plain ¶.
                 if let Some(start) = section_break_after(doc, story, path) {
                     let (x0, x1) = if line.rtl { (x + line.left, ex - 2.0) } else { (ex + 2.0, x + line.right) };
@@ -2058,4 +2069,63 @@ fn upright_east_asian(items: Vec<Draw>) -> Vec<Draw> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod paragraph_mark_color_tests {
+    use super::*;
+    use crate::{LayoutCache, LayoutOptions};
+
+    fn mark_colors(doc: &Document) -> Vec<Option<Rgb>> {
+        let mut cache = LayoutCache::new();
+        let layout = crate::layout(doc, &mut cache, &LayoutOptions::default());
+        layout.pages.iter().flat_map(|page| page_display(doc, page, &DisplayOptions { marks: true, ..Default::default() }))
+            .filter_map(|draw| match draw {
+                Draw::Mark { ch: '¶', color, .. } => Some(color),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn paragraph_marks_follow_their_own_font_colors() {
+        let mut doc = Document::from_text("Red\nYellow\nUnformatted");
+        let red = Rgb(255, 0, 0);
+        let yellow = Rgb(255, 215, 0);
+        for (i, color) in [red, yellow].into_iter().enumerate() {
+            let p = doc.para_mut(StoryRef::Body, &Path::top(i)).unwrap();
+            p.mark.color = Some(TextColor::Rgb(color));
+        }
+        // An automatic paragraph mark keeps the normal screen mark colour.
+        assert_eq!(mark_colors(&doc), [Some(red), Some(yellow), None]);
+    }
+
+    #[test]
+    fn paragraph_mark_inherits_the_document_style_color() {
+        let mut doc = Document::from_text("Inherited\nOverride");
+        let blue = Rgb(10, 45, 200);
+        let red = Rgb(235, 22, 38);
+        doc.styles.default_chr.color = Some(TextColor::Rgb(blue));
+        doc.para_mut(StoryRef::Body, &Path::top(1)).unwrap().mark.color = Some(TextColor::Rgb(red));
+        assert_eq!(mark_colors(&doc), [Some(blue), Some(red)]);
+    }
+
+    #[test]
+    fn tracked_paragraph_mark_color_overrides_its_font_color() {
+        let mut doc = Document::from_text("Changed");
+        doc.revisions.push(wordcraft_doc::Revision {
+            kind: wordcraft_doc::RevisionKind::Insert,
+            author: "Ana".into(),
+            date: String::new(),
+            move_name: None,
+        });
+        let p = doc.para_mut(StoryRef::Body, &Path::top(0)).unwrap();
+        p.mark.ins = Some(0);
+        p.mark.color = Some(TextColor::Rgb(Rgb(255, 0, 0)));
+        let mut cache = LayoutCache::new();
+        let layout = crate::layout(&doc, &mut cache, &LayoutOptions::default());
+        let opts = DisplayOptions { marks: true, markup: true, ..Default::default() };
+        let marks = page_display(&doc, &layout.pages[0], &opts);
+        assert!(marks.iter().any(|draw| matches!(draw, Draw::Mark { ch: '¶', color: Some(c), .. } if *c == revision_color(0))));
+    }
 }
