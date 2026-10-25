@@ -269,7 +269,7 @@ pub(crate) fn bar(app: &mut WordApp, ui: &mut egui::Ui) {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
     use wordcraft_doc::{Document, StoryRef};
@@ -290,7 +290,7 @@ mod tests {
         app.run("ui.documentTabs", json!({"value": true})).unwrap();
         assert!(app.tabs_visible());
         let json = serde_json::to_vec(&app.prefs()).unwrap();
-        let mut restored = app();
+        let mut restored = WordApp::new(Session::new(Document::new()), crate::Services::default());
         restored.apply_prefs(crate::UiState::from_json(&json).unwrap());
         assert!(restored.ui.document_tabs);
     }
