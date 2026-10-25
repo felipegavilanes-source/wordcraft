@@ -1424,9 +1424,8 @@ fn lines(
                 // interface mark colour. Automatic colour keeps the existing UI fallback.
                 // Tracked-change colours take precedence over the font colour above.
                 let color = color.or_else(|| {
-                    let p = para?;
-                    match doc.styles.resolve_char(p.props.style.as_deref(), &p.mark).color {
-                        TextColor::Rgb(c) => Some(c),
+                    match &pl.styles.get(pl.mark_style as usize)?.rc.color {
+                        TextColor::Rgb(c) => Some(*c),
                         TextColor::Auto => None,
                     }
                 });
