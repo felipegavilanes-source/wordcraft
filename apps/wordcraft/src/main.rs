@@ -239,6 +239,22 @@ fn write_prefs(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
 /// (`animations`), and making WordCraft the default app for Word documents (`default_apps`, #295).
 fn services(file_dialog: file_dialogs::Hook, ctx: &egui::Context) -> Services {
     Services {
+        // Every document tab needs its own recovery worker; otherwise a background
+        // unsaved document would lose crash protection when another tab is active.
+        enable_tab_recovery: if prefs_enabled() {
+            wordcraft_control_key::settings_dir().map(|dir| {
+                let ctx = ctx.clone();
+                Box::new(move |session: &mut Session| {
+                    let ctx = ctx.clone();
+                    session.enable_recovery(
+                        dir.join("recovery"),
+                        std::sync::Arc::new(move || ctx.request_repaint()),
+                    )
+                }) as Box<dyn Fn(&mut Session) -> Result<(), String>>
+            })
+        } else {
+            None
+        },
         file_dialog: Some(file_dialog),
         printers: Some(print::discover()),
         print_native: Some(print::submit()),
