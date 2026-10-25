@@ -22,6 +22,10 @@ pub(crate) struct DocumentTab {
 }
 
 impl DocumentTab {
+    pub(crate) fn path(&self) -> Option<&Path> {
+        self.session.path.as_deref()
+    }
+
     pub(crate) fn recovery_tick(&mut self) {
         self.session.recovery_tick();
     }
@@ -39,6 +43,53 @@ fn title(session: &Session) -> String {
 }
 
 impl WordApp {
+    /// Desktop startup: reopen only existing saved files, never an unsaved in-memory document.
+    /// Called by the desktop host only when no files were explicitly passed on the command line.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn restore_document_tabs(&mut self) -> bool {
+        if !self.ui.document_tabs || !self.ui.restore_document_tabs {
+            return false;
+        }
+        let paths: Vec<String> = self.ui.open_document_paths.iter().take(MAX_TABS)
+            .filter(|p| p.len() <= 4096 && Path::new(p.as_str()).is_file())
+            .cloned().collect();
+        if paths.is_empty() {
+            return false;
+        }
+        let preferred = self.ui.preferred_document_path.clone();
+        self.no_document = Some(self.session.document_id());
+        self.ui.backstage = false;
+        let mut opened = 0;
+        for path in paths {
+            // A password prompt for a formerly opened file should not block all other files.
+            match self.run("file.open", json!({"path": path})) {
+                Ok(response) if response.get("pending").is_none() && self.has_document() => opened += 1,
+                Ok(_) => { self.dialog = None; }
+                Err(e) => log::warn!("Could not restore document tab: {e}"),
+            }
+        }
+        if opened == 0 {
+            self.no_document = None;
+            return false;
+        }
+        if let Some(preferred) = preferred {
+            for i in 0..self.tab_count() {
+                let path = if i == self.active_document_tab {
+                    self.session.path.as_deref()
+                } else {
+                    let slot = if i < self.active_document_tab { i } else { i - 1 };
+                    self.document_tabs.get(slot).and_then(|t| t.path())
+                };
+                if path.is_some_and(|p| p == Path::new(&preferred)) {
+                    let _ = self.switch_document_tab(i);
+                    break;
+                }
+            }
+        }
+        self.ui.backstage = false;
+        true
+    }
+
     /// The web save picker has one active-document callback; until it can track per-tab tickets,
     /// tabs are desktop-only. Never hide a saved tab when the preference is switched off.
     pub(crate) fn tabs_visible(&self) -> bool {
