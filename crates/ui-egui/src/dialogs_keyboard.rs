@@ -236,10 +236,10 @@ pub fn customize_keyboard(app: &mut WordApp, ui: &mut Ui, f: &mut KeyboardForm) 
             f.current = std::mem::take(&mut f.pressed);
         }
         if ui.add_enabled(!f.current.is_empty(), egui::Button::new(tl!("Remove"))).clicked()
-            && change(app, if crate::keys::pt_br_word_keys(&app.ui.language) {
-                json!({"remove": {"command": f.command, "key": f.current}, "locale": "pt-br"})
+            && (if crate::keys::pt_br_word_keys(&app.ui.language) {
+                change(app, json!({"remove": {"command": f.command, "key": f.current}, "locale": "pt-br"}))
             } else {
-                json!({"remove": {"command": f.command, "key": f.current}})
+                change(app, json!({"remove": {"command": f.command, "key": f.current}}))
             })
         {
             f.current.clear();
