@@ -193,6 +193,12 @@ fn general(app: &mut WordApp, ui: &mut Ui) {
                 app.status(e);
             }
         }
+        if app.ui.document_tabs {
+            ui.indent("restore_document_tabs", |ui| {
+                ui.checkbox(&mut app.ui.restore_document_tabs, tl!("Restore saved document tabs when WordCraft starts"))
+                    .on_hover_text(tl!("Reopens files that were already saved. Unsaved documents are never silently discarded."));
+            });
+        }
     }
     let mut dark_page = app.session.view.dark_mode;
     if ui
