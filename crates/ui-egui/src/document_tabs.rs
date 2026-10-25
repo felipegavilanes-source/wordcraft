@@ -268,3 +268,91 @@ pub(crate) fn bar(app: &mut WordApp, ui: &mut egui::Ui) {
         None => {}
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wordcraft_doc::{Document, StoryRef};
+
+    fn app() -> WordApp {
+        WordApp::new(Session::new(Document::new()), crate::Services::default())
+    }
+
+    fn body(app: &WordApp) -> String {
+        app.session.doc.plain_text(StoryRef::Body)
+    }
+
+    #[test]
+    fn tabs_are_opt_in_and_the_preference_survives_restart() {
+        let mut app = app();
+        assert!(!app.ui.document_tabs);
+        assert!(app.run("ui.documentTabs", json!({"value": "yes"})).is_err());
+        app.run("ui.documentTabs", json!({"value": true})).unwrap();
+        assert!(app.tabs_visible());
+        let json = serde_json::to_vec(&app.prefs()).unwrap();
+        let mut restored = app();
+        restored.apply_prefs(crate::UiState::from_json(&json).unwrap());
+        assert!(restored.ui.document_tabs);
+    }
+
+    #[test]
+    fn new_tab_preserves_unsaved_text_undo_and_cursor() {
+        let mut app = app();
+        app.run("ui.documentTabs", json!({"value": true})).unwrap();
+        app.run("text.insert", json!({"text": "Original"})).unwrap();
+        let original_cursor = app.session.sel.clone();
+        app.run("file.new", json!({})).unwrap();
+        assert_eq!(app.tab_count(), 2);
+        assert_eq!(body(&app).trim(), "");
+        app.run("text.insert", json!({"text": "Second"})).unwrap();
+        app.switch_document_tab(0).unwrap();
+        assert_eq!(body(&app).trim(), "Original");
+        assert_eq!(app.session.sel, original_cursor);
+        assert!(app.session.dirty);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(body(&app).trim(), "");
+        app.switch_document_tab(1).unwrap();
+        assert_eq!(body(&app).trim(), "Second");
+    }
+
+    #[test]
+    fn closing_one_tab_prompts_before_discard_and_keeps_the_other() {
+        let mut app = app();
+        app.run("ui.documentTabs", json!({"value": true})).unwrap();
+        app.run("text.insert", json!({"text": "Keep"})).unwrap();
+        app.run("file.new", json!({})).unwrap();
+        app.run("text.insert", json!({"text": "Discard"})).unwrap();
+        assert_eq!(app.run("file.close", json!({})).unwrap(), json!({"pending": "saveChanges"}));
+        assert_eq!(app.tab_count(), 2);
+        app.run("ui.saveChanges", json!({"answer": "cancel"})).unwrap();
+        assert_eq!(app.tab_count(), 2);
+        app.run("file.close", json!({})).unwrap();
+        app.run("ui.saveChanges", json!({"answer": "dontSave"})).unwrap();
+        assert_eq!(app.tab_count(), 1);
+        assert_eq!(body(&app).trim(), "Keep");
+        assert!(app.run("ui.documentTabs", json!({"value": false})).is_ok());
+    }
+
+    #[test]
+    fn cannot_hide_multiple_open_documents_or_reorder_out_of_range() {
+        let mut app = app();
+        app.run("ui.documentTabs", json!({"value": true})).unwrap();
+        app.run("file.new", json!({})).unwrap();
+        assert!(app.run("ui.documentTabs", json!({"value": false})).is_err());
+        assert_eq!(app.tab_count(), 2);
+        app.reorder_document_tab(200, 0);
+        assert_eq!(app.tab_count(), 2);
+        app.reorder_document_tab(1, 0);
+        assert_eq!(app.active_document_tab, 0);
+    }
+
+    #[test]
+    fn failed_open_does_not_replace_or_duplicate_any_document() {
+        let mut app = app();
+        app.run("ui.documentTabs", json!({"value": true})).unwrap();
+        app.run("text.insert", json!({"text": "Never lose this"})).unwrap();
+        assert!(app.run("file.open", json!({"path": "/no-such-wordcraft-tab-file-987321.docx"})).is_err());
+        assert_eq!(app.tab_count(), 1);
+        assert_eq!(body(&app).trim(), "Never lose this");
+    }
+}
