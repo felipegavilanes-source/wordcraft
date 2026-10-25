@@ -1351,8 +1351,13 @@ impl WordApp {
         if !self.session.dirty && !self.save_unconfirmed()
             && let Some(index) = self.other_unsaved_tab()
         {
-            let _ = self.switch_document_tab(index);
-            self.status(tl!("Save or close the unsaved document before exiting."));
+            if self.switch_document_tab(index).is_ok() {
+                // Ask about the other dirty document immediately, not only on a
+                // second press of the window's close button.
+                let _ = self.run("file.close", json!({"quit": true}));
+            } else {
+                self.status(tl!("Save or close the unsaved document before exiting."));
+            }
             return false;
         }
         // No document open (#1129): nothing to save.
