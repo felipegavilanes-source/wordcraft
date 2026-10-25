@@ -1334,6 +1334,7 @@ impl Session {
                 self.typing_open,
                 self.undo_evicted,
                 self.column.clone(),
+                self.pending_move.clone(),
             ))
         } else {
             None
@@ -1353,8 +1354,8 @@ impl Session {
             self.typing_open = false;
         }
         // Only the paste right after a tracked cut makes it a move.
-        if (spec.mutates || matches!(id, "edit.undo" | "edit.undoTo" | "edit.redo"))
-            && !matches!(id, "edit.cut" | "edit.paste" | "edit.pasteMerge" | "edit.pasteText" | "edit.pasteSpecial")
+        if spec.mutates
+            && !matches!(id, "edit.cut" | "edit.paste" | "edit.pasteMerge" | "edit.pasteText" | "edit.pasteSpecial" | "edit.undo" | "edit.undoTo" | "edit.redo")
         {
             self.pending_move = None;
         }
@@ -1411,7 +1412,7 @@ impl Session {
             }
             Err(e) => {
                 self.autocap = None;
-                if let Some((d, s, h, r, t, ev, c)) = before_doc {
+                if let Some((d, s, h, r, t, ev, c, pending_move)) = before_doc {
                     self.doc = d;
                     self.sel = s;
                     self.history = h;
@@ -1420,6 +1421,7 @@ impl Session {
                     // The steps the command pushed out are back, so they no longer count as gone.
                     self.undo_evicted = ev;
                     self.column = c;
+                    self.pending_move = pending_move;
                 }
                 if let Some(b) = blocks_before {
                     self.building_blocks = b;
