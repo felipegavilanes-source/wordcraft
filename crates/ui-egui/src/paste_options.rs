@@ -251,7 +251,7 @@ mod tests {
     fn changing_paste_format_preserves_tracked_move() {
         for mode in [PasteMode::Merge, PasteMode::Text] {
             let mut app = WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::new()), crate::Services::default());
-            app.run("document.setText", json!({"text": "First one.\\nSecond one.\\nThird one."})).unwrap();
+            app.run("document.setText", json!({"text": "First one.\nSecond one.\nThird one."})).unwrap();
             app.run("file.setAuthor", json!({"name": "Ana"})).unwrap();
             app.run("review.trackChanges", json!({"value": true})).unwrap();
             app.run("select.range", json!({"anchor": {"block": 1, "off": 0}, "focus": {"block": 2, "off": 0}})).unwrap();
