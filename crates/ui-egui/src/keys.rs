@@ -123,16 +123,7 @@ fn ui_shortcut(key: Key, m: Modifiers) -> Option<(&'static str, Value)> {
 /// Windows Word's Brazilian Portuguese keyboard layout. The English registry stays unchanged:
 /// only the desktop UI remaps these keys, and scripts/agents retain stable command IDs.
 /// Word for Mac keeps its platform shortcuts. Ctrl+C/X/V/Z and other unaffected keys remain.
-const PT_BR_WORD_KEYS: &[(&str, &str)] = &[
-    ("Mod+N", "format.bold"),
-    ("Mod+S", "format.underline"),
-    ("Mod+B", "file.save"),
-    ("Mod+O", "file.new"),
-    ("Mod+A", "file.open"),
-    ("Mod+T", "select.all"),
-    ("Mod+Q", "para.alignLeft"),
-    ("Mod+L", "edit.find"),
-];
+use wordcraft_engine::keymap::PT_BR_WORD_KEYS;
 
 fn pt_br_word_keys(language: &str) -> bool {
     !cfg!(target_os = "macos")
@@ -150,6 +141,11 @@ pub(crate) fn localized_resolve<'a>(reg: &'a wordcraft_engine::Registry, user: &
         }
     }
     if user.removed.contains(&key) {
+        return None;
+    }
+    if pt_br_word_keys(language)
+        && user.removed_localized.get("pt-br").is_some_and(|keys| keys.contains(&key))
+    {
         return None;
     }
     if pt_br_word_keys(language)
@@ -830,6 +826,28 @@ mod tests {
             user.assigned.remove("Mod+N");
             user.removed.insert("Mod+N".into());
             assert!(localized_resolve(&reg, &user, "pt-br", "Mod+N").is_none());
+        }
+    }
+
+    #[test]
+    fn brazilian_shortcut_removal_is_scoped_to_portuguese() {
+        let reg = wordcraft_engine::cmd::registry();
+        let mut user = wordcraft_engine::keymap::KeyMap::default();
+        assert!(user.remove_for_locale(&reg, "pt-br", "format.bold", "Mod+N").unwrap());
+        assert_eq!(localized_resolve(&reg, &user, "en", "Mod+N").map(|c| c.id), Some("file.new"));
+        if !cfg!(target_os = "macos") {
+            assert!(localized_resolve(&reg, &user, "pt-br", "Mod+N").is_none());
+            assert!(!localized_keys_for(&reg, &user, "pt-br", "format.bold").contains(&"Mod+N".to_string()));
+        }
+        let saved = serde_json::to_string(&user).unwrap();
+        let restored: wordcraft_engine::keymap::KeyMap = serde_json::from_str(&saved).unwrap();
+        assert_eq!(user, restored);
+        assert!(!restored.removed.contains("Mod+N"), "English Ctrl+N remains New");
+        assert!(!user.remove_for_locale(&reg, "pt-br", "format.bold", "Mod+N").unwrap());
+        user.reset();
+        assert!(user.is_empty());
+        if !cfg!(target_os = "macos") {
+            assert_eq!(localized_resolve(&reg, &user, "pt-br", "Mod+N").map(|c| c.id), Some("format.bold"));
         }
     }
 
