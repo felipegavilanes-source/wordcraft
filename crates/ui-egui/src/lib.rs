@@ -34,6 +34,7 @@ pub mod control;
 pub mod credits;
 pub mod crop;
 pub mod desktop_theme;
+pub mod document_tabs;
 pub mod dialogs;
 pub mod dialogs_chart;
 pub mod dialogs_controls;
@@ -242,6 +243,8 @@ pub struct UiState {
     /// Toolbar takes it away; Show Quick Access Toolbar (the ribbon's right-click menu, Customize
     /// Ribbon › Quick Access Toolbar) brings it back. Kept between runs.
     pub quick_access_toolbar: bool,
+    /// Show independent documents as Chrome-style tabs; off until the user enables it.
+    pub document_tabs: bool,
     pub recent: Vec<String>,
     /// Symbols inserted from the Symbol dialog, most recent first (#321).
     pub recent_symbols: Vec<dialogs_insert::RecentSymbol>,
@@ -362,6 +365,7 @@ impl Default for UiState {
             print: print_page::PrintSettings::default(),
             ribbon_collapsed: false,
             quick_access_toolbar: true,
+            document_tabs: false,
             recent: Vec::new(),
             recent_symbols: Vec::new(),
             recent_colors: Vec::new(),
@@ -497,6 +501,11 @@ fn migrate_units(v: &mut Value) {
 /// The application.
 pub struct WordApp {
     pub session: Session,
+    /// Inactive editing sessions; the active document lives in `session`.
+    pub(crate) document_tabs: Vec<document_tabs::DocumentTab>,
+    pub(crate) active_document_tab: usize,
+    pub(crate) opening_document_tab: bool,
+    pub(crate) drag_document_tab: Option<usize>,
     pub ui: UiState,
     pub services: Services,
     pub printing: printing::State,
@@ -652,6 +661,10 @@ impl WordApp {
         }
         WordApp {
             session,
+            document_tabs: Vec::new(),
+            active_document_tab: 0,
+            opening_document_tab: false,
+            drag_document_tab: None,
             ui: UiState::default(),
             services,
             printing: Default::default(),
@@ -860,7 +873,10 @@ impl WordApp {
             self.dialog = dialogs::Dialog::open(name, self);
             return Ok(json!({"pending": name}));
         }
-        if (self.session.dirty || self.save_unconfirmed() || refused.is_some()) && discards_document(id, &params) {
+        if (self.session.dirty || self.save_unconfirmed() || refused.is_some())
+            && discards_document(id, &params)
+            && !self.opens_document_tab(id, &params)
+        {
             let name = self.prompt_name();
             self.dialog = Some(dialogs::Dialog::SaveChanges {
                 name,
@@ -928,6 +944,9 @@ impl WordApp {
             let e = tl!("No document is open. Create a document or open one first.").to_string();
             self.status(e.clone());
             return Err(e);
+        }
+        if !self.opening_document_tab && self.opens_document_tab(id, &params) {
+            return self.open_document_tab(id, params);
         }
         if let Some(r) = self.ui_command(id, &params) {
             return r;
@@ -1299,6 +1318,12 @@ impl WordApp {
         if self.quit_requested {
             return true;
         }
+        // A hidden dirty tab must never be lost when the OS closes the window.
+        if let Some(index) = self.other_unsaved_tab() {
+            let _ = self.switch_document_tab(index);
+            self.status(tl!("Save or close the unsaved document before exiting."));
+            return false;
+        }
         // No document open (#1129): nothing to save.
         if !self.has_document() {
             return true;
@@ -1323,13 +1348,23 @@ impl WordApp {
             return Err(e.into());
         }
         if params.get("quit").and_then(Value::as_bool) == Some(true) {
+            if self.other_unsaved_tab().is_some() {
+                return Err("Save or close all other documents with unsaved changes before quitting".into());
+            }
             self.quit_requested = true;
             return Ok(json!({"quit": true}));
         }
         if !self.has_document() {
             return Ok(json!({"closed": false}));
         }
-        self.execute("file.new", json!({}))?;
+        if !self.document_tabs.is_empty() {
+            return self.close_active_document_tab();
+        }
+        // Close the last document rather than making an extra tab.
+        self.opening_document_tab = true;
+        let closed = self.execute("file.new", json!({}));
+        self.opening_document_tab = false;
+        closed?;
         self.no_document = Some(self.session.document_id());
         self.ui.backstage = false;
         Ok(json!({"closed": true}))
@@ -1704,6 +1739,26 @@ impl WordApp {
                 }
                 json!({"alignmentGuides": self.ui.alignment_guides})
             }
+            "ui.documentTabs" => {
+                match p.get("value") {
+                    None => {}
+                    Some(Value::Bool(false)) if !self.document_tabs.is_empty() => {
+                        return Some(Err("Close the other document tabs before turning tabs off".into()));
+                    }
+                    Some(Value::Bool(on)) if cfg!(target_arch = "wasm32") && *on => {
+                        return Some(Err("Document tabs are not yet available in the browser".into()));
+                    }
+                    Some(Value::Bool(on)) => self.ui.document_tabs = *on,
+                    Some(_) => return Some(Err("`value` must be true or false".into())),
+                }
+                json!({"documentTabs": self.ui.document_tabs})
+            }
+            "ui.documentTab" => {
+                let Some(index) = p.get("index").and_then(Value::as_u64).and_then(|n| usize::try_from(n).ok()) else {
+                    return Some(Err("`index` must be a non-negative integer".into()));
+                };
+                return Some(self.switch_document_tab(index));
+            }
             "ui.startScreen" => {
                 // File › Options › General › Start-up (#766): `value` true or false turns showing
                 // File › Home at start-up on or off; no value reads it.
@@ -1950,6 +2005,22 @@ impl WordApp {
         }
         options::sync(self);
         self.settle_async_saves();
+        // Browser-style tab cycling, without inserting a Tab character into the document.
+        if self.tabs_visible() && self.tab_count() > 1 && self.dialog.is_none() && !self.ui.backstage {
+            let direction = ctx.input_mut(|i| {
+                let shift = egui::Modifiers { command: true, shift: true, ..Default::default() };
+                let normal = egui::Modifiers { command: true, ..Default::default() };
+                if i.consume_key(shift, egui::Key::Tab) { -1_i32 }
+                else if i.consume_key(normal, egui::Key::Tab) { 1_i32 }
+                else { 0_i32 }
+            });
+            if direction != 0 {
+                let total = self.tab_count();
+                let next = if direction > 0 { (self.active_document_tab + 1) % total }
+                    else { (self.active_document_tab + total - 1) % total };
+                if let Err(e) = self.switch_document_tab(next) { self.status(e); }
+            }
+        }
         // Chinese text wants the Chinese face before the Japanese one (one glyph style per line).
         // An installed CJK font is read only once CJK text is shown (#241): a CJK interface, the
         // language names in Options, or a file name the caption is drawing. A file opened later
@@ -2217,11 +2288,13 @@ impl WordApp {
         } else if !self.has_document() {
             // No document open (#1129): the ribbon greyed out but for Help, and no page.
             chrome::title_bar(self, ui);
+            document_tabs::bar(self, ui);
             ribbon::show(self, ui);
             chrome::status_bar(self, ui);
             egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.canvas)).show(ui, |_| {});
         } else {
             chrome::title_bar(self, ui);
+            document_tabs::bar(self, ui);
             if !self.session.view.focus_mode {
                 ribbon::show(self, ui);
                 chrome::status_bar(self, ui);
@@ -2618,6 +2691,8 @@ pub(crate) fn works_without_document(id: &str) -> bool {
             | "ui.discord"
             | "ui.caretAnimation"
             | "ui.startScreen"
+            | "ui.documentTabs"
+            | "ui.documentTab"
     ) || id.starts_with("help.")
 }
 
