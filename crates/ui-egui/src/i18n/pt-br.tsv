@@ -2300,3 +2300,10 @@
 	Type a size in any unit, such as 5 cm or 300 px. The other side follows, so the picture keeps its proportions.	Digite um tamanho em qualquer unidade, como 5 cm ou 300 px. O outro lado acompanha, e a imagem mantém as proporções.
 
 	Import…	Importar…
+
+# Optional document tabs
+	Show document tabs (like a web browser)	Mostrar abas de documentos (como no navegador)
+	Keep multiple documents in one window. Each tab has its own undo history, caret and scroll position.	Mantenha vários documentos em uma janela. Cada aba preserva o histórico de desfazer, o cursor e a posição de rolagem.
+	Restore saved document tabs when WordCraft starts	Restaurar abas de documentos salvos ao iniciar o WordCraft
+	Reopens files that were already saved. Unsaved documents are never silently discarded.	Reabre arquivos já salvos. Documentos não salvos nunca são descartados sem aviso.
+	Save or close the unsaved document before exiting.	Salve ou feche o documento com alterações não salvas antes de sair.
