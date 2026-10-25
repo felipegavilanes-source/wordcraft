@@ -125,7 +125,7 @@ fn ui_shortcut(key: Key, m: Modifiers) -> Option<(&'static str, Value)> {
 /// Word for Mac keeps its platform shortcuts. Ctrl+C/X/V/Z and other unaffected keys remain.
 use wordcraft_engine::keymap::PT_BR_WORD_KEYS;
 
-fn pt_br_word_keys(language: &str) -> bool {
+pub(crate) fn pt_br_word_keys(language: &str) -> bool {
     !cfg!(target_os = "macos")
         && (language.eq_ignore_ascii_case("pt-br")
             || (language.eq_ignore_ascii_case(crate::i18n::AUTO) && crate::i18n::system_lang().code() == "pt-br"))
