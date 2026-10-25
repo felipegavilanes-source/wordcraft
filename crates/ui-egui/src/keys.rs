@@ -135,12 +135,14 @@ const PT_BR_WORD_KEYS: &[(&str, &str)] = &[
 ];
 
 fn pt_br_word_keys(language: &str) -> bool {
-    !cfg!(target_os = "macos") && crate::i18n::Lang::from_pref(language).code() == "pt-br"
+    !cfg!(target_os = "macos")
+        && (language.eq_ignore_ascii_case("pt-br")
+            || (language.eq_ignore_ascii_case(crate::i18n::AUTO) && crate::i18n::system_lang().code() == "pt-br"))
 }
 
 /// Resolve a key using the UI locale. Explicit user assignments and removals always win.
 /// Built-in English keys displaced by the pt-BR layout do not trigger their old commands.
-fn localized_resolve<'a>(reg: &'a wordcraft_engine::Registry, user: &wordcraft_engine::keymap::KeyMap, language: &str, key: &str) -> Option<&'a wordcraft_engine::CommandSpec> {
+pub(crate) fn localized_resolve<'a>(reg: &'a wordcraft_engine::Registry, user: &wordcraft_engine::keymap::KeyMap, language: &str, key: &str) -> Option<&'a wordcraft_engine::CommandSpec> {
     let key = wordcraft_engine::keymap::normalize(key)?;
     if let Some(id) = user.assigned.get(&key) {
         if let Some(spec) = reg.get(id) {
