@@ -6,6 +6,7 @@
 use egui::{Order, Pos2, vec2};
 use serde_json::{Value, json};
 use wordcraft_doc::Pos;
+use wordcraft_doc::edit::Fragment;
 
 use crate::WordApp;
 
@@ -56,6 +57,7 @@ impl PasteMode {
 pub struct PostPaste {
     pub params: Value,
     pub mode: PasteMode,
+    clipboard: Option<Fragment>,
     document: u64,
     caret: Pos,
     revision: u64,
@@ -79,6 +81,7 @@ impl PostPaste {
         Some(Self {
             params,
             mode,
+            clipboard: app.session.clipboard.clone(),
             document: app.session.document_id(),
             caret: app.session.sel.focus.clone(),
             revision: app.session.rev(),
@@ -118,13 +121,20 @@ pub fn switch(app: &mut WordApp, mode: PasteMode) {
         return;
     }
     let before = app.session.undo_steps_so_far();
-    if let Err(err) = app.execute_user(mode.command(), saved.params.clone()) {
+    // The clipboard may have changed without editing the document. Replay using the
+    // captured rich fragment, then restore the user's current clipboard in all cases.
+    let live_clipboard = std::mem::replace(&mut app.session.clipboard, saved.clipboard.clone());
+    let result = app.execute_user(mode.command(), saved.params.clone());
+    if result.is_ok() {
+        app.paste_options = PostPaste::capture(app, saved.params, mode, before);
+    }
+    app.session.clipboard = live_clipboard;
+    if let Err(err) = result {
         // The original paste remains available as Redo when a replacement fails.
         let _ = app.execute_user("edit.redo", json!({}));
         app.status(err);
         return;
     }
-    app.paste_options = PostPaste::capture(app, saved.params, mode, before);
     app.canvas.want_focus = true;
 }
 
