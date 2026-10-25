@@ -183,7 +183,7 @@ pub fn customize_keyboard(app: &mut WordApp, ui: &mut Ui, f: &mut KeyboardForm) 
     });
 
     heading(ui, "Choose a shortcut");
-    let keys = app.session.keymap.keys_for(&reg, &f.command);
+    let keys = crate::keys::localized_keys_for(&reg, &app.session.keymap, &app.ui.language, &f.command);
     if !keys.contains(&f.current) {
         f.current = keys.first().cloned().unwrap_or_default();
     }
@@ -201,7 +201,7 @@ pub fn customize_keyboard(app: &mut WordApp, ui: &mut Ui, f: &mut KeyboardForm) 
             close = capture(ui, f);
             ui.add_space(4.0);
             if !f.pressed.is_empty() {
-                let owner = match app.session.keymap.resolve(&reg, &f.pressed) {
+                let owner = match crate::keys::localized_resolve(&reg, &app.session.keymap, &app.ui.language, &f.pressed) {
                     Some(s) => crate::i18n::fmt(tl!("Now used by {command}"), &[("command", tl!(s.label))]),
                     None => tl!("Not used by any command").to_string(),
                 };
