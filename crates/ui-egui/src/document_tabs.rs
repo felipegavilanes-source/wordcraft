@@ -21,6 +21,16 @@ pub(crate) struct DocumentTab {
     last_autosave: f64,
 }
 
+impl DocumentTab {
+    pub(crate) fn recovery_tick(&mut self) {
+        self.session.recovery_tick();
+    }
+
+    pub(crate) fn recovery_wait(&self) -> Option<std::time::Duration> {
+        self.session.recovery_wait()
+    }
+}
+
 fn title(session: &Session) -> String {
     session.path.as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned())
         .or_else(|| session.file_name.clone())
@@ -94,6 +104,9 @@ impl WordApp {
         fresh.view.dark_mode = self.session.view.dark_mode;
         fresh.view.zoom = self.session.view.zoom;
         fresh.set_editing_language(crate::i18n::Lang::from_pref(&self.ui.language).editing_lang());
+        if let Some(enable) = &self.services.enable_tab_recovery {
+            enable(&mut fresh)?;
+        }
 
         let previous = self.active_document_tab;
         let tab = DocumentTab {
