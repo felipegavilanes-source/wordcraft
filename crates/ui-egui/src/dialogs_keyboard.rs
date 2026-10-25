@@ -236,7 +236,11 @@ pub fn customize_keyboard(app: &mut WordApp, ui: &mut Ui, f: &mut KeyboardForm) 
             f.current = std::mem::take(&mut f.pressed);
         }
         if ui.add_enabled(!f.current.is_empty(), egui::Button::new(tl!("Remove"))).clicked()
-            && change(app, json!({"remove": {"command": f.command, "key": f.current}}))
+            && change(app, if crate::keys::pt_br_word_keys(&app.ui.language) {
+                json!({"remove": {"command": f.command, "key": f.current}, "locale": "pt-br"})
+            } else {
+                json!({"remove": {"command": f.command, "key": f.current}})
+            })
         {
             f.current.clear();
         }
@@ -308,6 +312,23 @@ mod tests {
         let mut c = app();
         c.apply_prefs(serde_json::from_str(r#"{"keyboard": {"assigned": {"Mod+Q": "gone.command", "Bad+": 1}, "removed": 7}}"#).unwrap());
         assert!(c.session.keymap.is_empty());
+    }
+
+    #[test]
+    fn brazilian_keyboard_removal_survives_restart_without_changing_english() {
+        let app = || WordApp::new(Session::new(wordcraft_doc::Document::new()), Services::default());
+        let mut a = app();
+        let r = a.run("tools.customizeKeyboard", json!({
+            "locale": "pt-br", "remove": {"command": "format.bold", "key": "Mod+N"}
+        })).unwrap();
+        assert_eq!(r["removed"], true);
+        assert_eq!(a.session.keymap.resolve(&a.session.registry, "Mod+N").map(|s| s.id), Some("file.new"));
+        let saved = serde_json::to_string(&a.prefs()).unwrap();
+        let mut b = app();
+        b.apply_prefs(serde_json::from_str(&saved).unwrap());
+        assert!(b.session.keymap.removed_localized.get("pt-br").is_some_and(|keys| keys.contains("Mod+N")));
+        assert_eq!(b.session.keymap.resolve(&b.session.registry, "Mod+N").map(|s| s.id), Some("file.new"));
+        assert_eq!(b.run("tools.customizeKeyboard", json!({"reset": true})).unwrap()["custom"]["removedLocalized"], serde_json::Value::Null);
     }
 
     /// #1905: a command with no shortcut shows (none) instead of a blank keys box.
