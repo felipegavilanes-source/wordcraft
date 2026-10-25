@@ -2,7 +2,7 @@
 //! No DOCX bytes are rewritten when switching documents.
 use std::path::{Path, PathBuf};
 
-use egui::{Color32, RichText, Sense, vec2};
+use egui::{RichText, Sense, vec2};
 use serde_json::{Value, json};
 use wordcraft_engine::Session;
 
@@ -57,9 +57,6 @@ impl WordApp {
     }
 
     pub(crate) fn open_document_tab(&mut self, id: &str, params: Value) -> Result<Value, String> {
-        if self.tab_count() >= MAX_TABS {
-            return Err(format!("Too many open documents (limit {MAX_TABS}); close a tab before opening another"));
-        }
         if self.dialog.is_some() || self.awaiting_save.is_some() || self.save_unconfirmed() {
             return Err("Finish the current dialog or save before opening another tab".into());
         }
@@ -82,6 +79,9 @@ impl WordApp {
             }
         }
 
+        if self.tab_count() >= MAX_TABS {
+            return Err(format!("Too many open documents (limit {MAX_TABS}); close a tab before opening another"));
+        }
         let mut fresh = Session::new(self.session.blank_document());
         fresh.system_region = self.session.system_region.clone();
         fresh.prefs = self.session.prefs.clone();
@@ -105,8 +105,8 @@ impl WordApp {
             no_document: self.no_document.take(),
             last_autosave: self.last_autosave,
         };
-        self.document_tabs.push(tab);
-        self.active_document_tab = self.document_tabs.len();
+        self.document_tabs.insert(previous, tab);
+        self.active_document_tab = previous + 1;
         self.last_autosave = 0.0;
         // Only this internal call replaces the empty staging session.
         self.opening_document_tab = true;
@@ -114,7 +114,8 @@ impl WordApp {
         self.opening_document_tab = false;
         if result.is_err() {
             // An invalid path or unsupported document must not create an empty tab.
-            if let Some(old) = self.document_tabs.pop() {
+            if previous < self.document_tabs.len() {
+                let old = self.document_tabs.remove(previous);
                 self.session = old.session;
                 self.canvas = old.canvas;
                 self.controls = old.controls;
@@ -246,7 +247,7 @@ pub(crate) fn bar(app: &mut WordApp, ui: &mut egui::Ui) {
                         }
                     });
                 });
-                if ui.add(egui::Button::new(RichText::new("+").color(Color32::from_rgb(120, 180, 245))))
+                if ui.add(egui::Button::new(RichText::new("+").color(t.accent)))
                     .on_hover_text("New document")
                     .clicked()
                 {
