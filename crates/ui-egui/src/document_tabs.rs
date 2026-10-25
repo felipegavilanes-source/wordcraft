@@ -303,7 +303,7 @@ pub(crate) fn bar(app: &mut WordApp, ui: &mut egui::Ui) {
                                 action = Some(Action::Switch(index));
                             }
                             if ui.add(egui::Button::new(RichText::new("×").color(t.text_dim)).small())
-                                .on_hover_text("Close document")
+                                .on_hover_text(tl!("Close document"))
                                 .clicked()
                             {
                                 action = Some(Action::Close(index));
@@ -312,7 +312,7 @@ pub(crate) fn bar(app: &mut WordApp, ui: &mut egui::Ui) {
                     });
                 });
                 if ui.add(egui::Button::new(RichText::new("+").color(t.accent)))
-                    .on_hover_text("New document")
+                    .on_hover_text(tl!("New document"))
                     .clicked()
                 {
                     action = Some(Action::New);
