@@ -97,6 +97,8 @@ pub use file_dialogs::{FileDialogAnswer, FileDialogRequest, open_filters};
 /// Platform services injected by the host (file dialogs, file I/O).
 #[derive(Default)]
 pub struct Services {
+    /// Desktop: enable crash recovery for each newly opened document tab.
+    pub enable_tab_recovery: Option<Box<dyn Fn(&mut Session) -> Result<(), String>>>,
     /// Desktop: discover configured printers on a worker.
     pub printers: Option<printing::Discover>,
     /// Desktop: submit the PDF with the chosen settings on a worker.
@@ -2092,6 +2094,13 @@ impl WordApp {
         self.watch_fonts(ctx);
         let document = self.session.document_id();
         self.session.recovery_tick();
+        // Inactive documents still need their crash-recovery snapshots to advance.
+        for tab in &mut self.document_tabs {
+            tab.recovery_tick();
+            if let Some(wait) = tab.recovery_wait() {
+                ctx.request_repaint_after(wait);
+            }
+        }
         if self.session.document_id() != document {
             self.autosave_path = None;
             self.dialog = None;
