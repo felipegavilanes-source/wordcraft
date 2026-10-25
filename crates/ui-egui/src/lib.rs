@@ -247,6 +247,11 @@ pub struct UiState {
     pub quick_access_toolbar: bool,
     /// Show independent documents as Chrome-style tabs; off until the user enables it.
     pub document_tabs: bool,
+    /// Reopen the previously open saved files on the desktop when tabs are enabled.
+    pub restore_document_tabs: bool,
+    /// Saved-file paths only. Unsaved documents are protected by recovery, not silently restored.
+    pub open_document_paths: Vec<String>,
+    pub preferred_document_path: Option<String>,
     pub recent: Vec<String>,
     /// Symbols inserted from the Symbol dialog, most recent first (#321).
     pub recent_symbols: Vec<dialogs_insert::RecentSymbol>,
@@ -368,6 +373,9 @@ impl Default for UiState {
             ribbon_collapsed: false,
             quick_access_toolbar: true,
             document_tabs: false,
+            restore_document_tabs: true,
+            open_document_paths: Vec::new(),
+            preferred_document_path: None,
             recent: Vec::new(),
             recent_symbols: Vec::new(),
             recent_colors: Vec::new(),
@@ -780,6 +788,25 @@ impl WordApp {
         ui.keyboard = self.session.keymap.clone();
         ui.ribbon = self.session.ribbon.clone();
         ui.ink_pens = self.session.view.draw.pens.clone();
+        ui.open_document_paths.clear();
+        ui.preferred_document_path = None;
+        if self.ui.document_tabs && !cfg!(target_arch = "wasm32") {
+            for i in 0..self.tab_count() {
+                let path = if i == self.active_document_tab {
+                    self.session.path.as_deref()
+                } else {
+                    let slot = if i < self.active_document_tab { i } else { i - 1 };
+                    self.document_tabs.get(slot).and_then(|t| t.path())
+                };
+                if let Some(path) = path {
+                    let path = path.to_string_lossy().into_owned();
+                    if i == self.active_document_tab {
+                        ui.preferred_document_path = Some(path.clone());
+                    }
+                    ui.open_document_paths.push(path);
+                }
+            }
+        }
         ui
     }
 
