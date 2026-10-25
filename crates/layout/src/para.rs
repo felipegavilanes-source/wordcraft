@@ -350,6 +350,8 @@ pub struct LabelRun {
 pub struct ParaLayout {
     pub rp: ResolvedPara,
     pub styles: Vec<StyleRun>,
+    /// The paragraph mark's style index, resolved with table character formatting.
+    pub mark_style: u32,
     pub glyphs: Vec<Glyph>,
     pub clusters: Vec<Cluster>,
     pub lines: Vec<Line>,
@@ -1896,6 +1898,7 @@ pub fn layout_para(p: &Paragraph, env: &ParaEnv) -> ParaLayout {
     let mut pl = ParaLayout {
         rp,
         styles: b.styles,
+        mark_style,
         glyphs: b.glyphs,
         clusters: b.clusters,
         shown: b.shown,
