@@ -1319,7 +1319,9 @@ impl WordApp {
             return true;
         }
         // A hidden dirty tab must never be lost when the OS closes the window.
-        if let Some(index) = self.other_unsaved_tab() {
+        if !self.session.dirty && !self.save_unconfirmed()
+            && let Some(index) = self.other_unsaved_tab()
+        {
             let _ = self.switch_document_tab(index);
             self.status(tl!("Save or close the unsaved document before exiting."));
             return false;
@@ -1349,7 +1351,12 @@ impl WordApp {
         }
         if params.get("quit").and_then(Value::as_bool) == Some(true) {
             if self.other_unsaved_tab().is_some() {
-                return Err("Save or close all other documents with unsaved changes before quitting".into());
+                // Each unsaved tab gets its own Save Changes confirmation. Completing this
+                // document's prompt may close it, but never silently quits over another.
+                if !self.document_tabs.is_empty() {
+                    return self.close_active_document_tab();
+                }
+                return Err("Save all documents with unsaved changes before quitting".into());
             }
             self.quit_requested = true;
             return Ok(json!({"quit": true}));
