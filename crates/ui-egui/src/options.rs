@@ -182,6 +182,18 @@ fn general(app: &mut WordApp, ui: &mut Ui) {
     theme_picker(app, ui);
     interface_size_picker(app, ui);
     ui.checkbox(&mut app.ui.mini_toolbar, tl!("Show the mini toolbar when text is selected"));
+    // Optional native document strip; defaults off and remains off in the browser.
+    if !cfg!(target_arch = "wasm32") {
+        let mut tabs = app.ui.document_tabs;
+        if ui.checkbox(&mut tabs, tl!("Show document tabs (like a web browser)"))
+            .on_hover_text(tl!("Keep multiple documents in one window. Each tab has its own undo history, caret and scroll position."))
+            .changed()
+        {
+            if let Err(e) = app.run("ui.documentTabs", json!({"value": tabs})) {
+                app.status(e);
+            }
+        }
+    }
     let mut dark_page = app.session.view.dark_mode;
     if ui
         .checkbox(&mut dark_page, tl!("Dark page (white text on black)"))
