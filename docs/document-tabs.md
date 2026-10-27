@@ -1,37 +1,19 @@
 # Optional document tabs (desktop)
 
-WordCraft can keep multiple documents inside one window, with a tab strip beneath the title bar.
-This feature is **off by default**.
+WordCraft now has a multi-document engine and separate native windows. This feature offers an **optional** browser-like tab strip instead of separate windows, without duplicating the document model. Enable it in File → Options → General. It is off by default.
 
-## Turn it on
+- A **+** creates a document; **×** closes the selected document through the existing Save/Don't Save/Cancel prompt.
+- Click a tab to activate its document. Drag one tab over another to reorder them.
+- Ctrl+Tab / Ctrl+Shift+Tab (Cmd on macOS) switches documents.
+- Each document keeps its own undo history, selection, zoom, and recovery managed by WordCraft's existing engine.
+- Optionally restore previously saved files on startup. Unsaved files without paths are not silently restored.
+- To disable tab mode, first close all but one document. To switch window mode, close any additional native windows.
+- The browser build keeps its existing one-window behavior; this setting is desktop-only.
 
-Go to **File → Options → General → Interface** and enable **Show document tabs (like a web browser)**.
-The preference is stored in `ui.json` as `documentTabs`.
+This branch intentionally does not re-add the old in-repository pt-BR TSV file: translations are managed separately by the upstream project.
 
-When enabled:
-- **New (+)** creates a separate blank editing session; File → New / Open opens new tabs.
-- **Select a tab** to return to that document, with its own selection, undo history and scroll state.
-- **Close (×)** closes only that document; changes are confirmed with the existing Save / Don't Save / Cancel prompt.
-- **Drag a tab** onto another tab to change its position.
-- **Ctrl+Tab / Ctrl+Shift+Tab** (Cmd on macOS) cycles documents.
-- **File → Options → General → Restore saved document tabs** remembers the paths of open, saved files across application launches. An unsaved document without a path cannot be reopened by path.
-- Opening an already open path focuses its existing document rather than opening the file twice.
+## Validation still required
 
-The feature is desktop-only for now: browser document downloads may complete asynchronously and require per-tab save tickets to avoid losing confirmation when switching.
-
-## Safety
-
-Each document has a separate `Session`, so the undo history, caret, and document model do not overwrite each other. Crash recovery runs for inactive tabs as well as for the foreground session. Closing the window does not silently discard dirty tabs. Disabling tabs while more than one document is open is refused so no tab becomes inaccessible.
-
-**Limit:** 24 tabs per window, to bound memory use.
-
-## Quality checks for a future upstream pull request
-
-- [ ] `cargo fmt --all --check`
-- [ ] `cargo test -p wordcraft-ui-egui document_tabs`
-- [ ] `cargo xtask ci`
-- [ ] Desktop smoke test: open two DOCX files, edit them, switch, undo independently, save one, close the other.
-- [ ] Check restoration when a file was moved or deleted, and when a file is password-protected.
-- [ ] Run on Windows, macOS and Linux.
-
-This feature branch should be rebased onto the upstream current main before proposing a pull request.
+- cargo fmt --all --check
+- cargo test -p wordcraft-ui-egui document_tabs
+- Desktop smoke tests on Windows/macOS/Linux, including save prompts, multiple files, startup restore, and switching window mode
