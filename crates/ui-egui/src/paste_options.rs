@@ -67,7 +67,7 @@ pub struct PostPaste {
 impl PostPaste {
     /// Remember a paste once the engine finished applying it.
     pub fn capture(app: &WordApp, mut params: Value, mode: PasteMode, undo_before: u64) -> Option<Self> {
-        if app.session.undo_steps_so_far() <= undo_before {
+        if app.session.undo_mark() <= undo_before {
             return None;
         }
         // In-app rich fragments may not supply system text. Store the clipboard's exact
@@ -85,14 +85,14 @@ impl PostPaste {
             document: app.session.document_id(),
             caret: app.session.sel.focus.clone(),
             revision: app.session.rev(),
-            undo_steps: app.session.undo_steps_so_far(),
+            undo_steps: app.session.undo_mark(),
         })
     }
 
     /// A paste is replaceable only while it remains the most recent, untouched edit.
     pub fn current(&self, app: &WordApp) -> bool {
         self.document == app.session.document_id()
-            && self.undo_steps == app.session.undo_steps_so_far()
+            && self.undo_steps == app.session.undo_mark()
             && self.revision == app.session.rev()
             && self.caret == app.session.sel.focus
     }
@@ -120,7 +120,7 @@ pub fn switch(app: &mut WordApp, mode: PasteMode) {
     if app.execute_user("edit.undo", json!({})).is_err() {
         return;
     }
-    let before = app.session.undo_steps_so_far();
+    let before = app.session.undo_mark();
     // The clipboard may have changed without editing the document. Replay using the
     // captured rich fragment, then restore the user's current clipboard in all cases.
     let live_clipboard = std::mem::replace(&mut app.session.clipboard, saved.clipboard.clone());
@@ -306,7 +306,7 @@ mod tests {
     #[test]
     fn default_paste_setting_uses_a_validated_ui_command() {
         let mut app = WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::new()), crate::Services::default());
-        assert!(crate::works_without_document("ui.defaultPaste"));
+        assert!(crate::app::works_without_document("ui.defaultPaste"));
         assert_eq!(app.run("ui.defaultPaste", json!({})).unwrap(), json!({"defaultPaste": "source"}));
         assert_eq!(app.run("ui.defaultPaste", json!({"value": "merge"})).unwrap(), json!({"defaultPaste": "merge"}));
         assert!(app.run("ui.defaultPaste", json!({"value": "unknown"})).is_err());
@@ -327,7 +327,7 @@ mod tests {
         let clipboard_text = fragment.clipboard_text();
         assert_ne!(fragment.plain_text(), clipboard_text);
         app.run("caret.docEnd", json!({})).unwrap();
-        let before = app.session.undo_steps_so_far();
+        let before = app.session.undo_mark();
         app.run("edit.paste", json!({"text": clipboard_text})).unwrap();
         let captured = PostPaste::capture(&app, json!({}), PasteMode::Source, before).unwrap();
         assert_eq!(captured.params["text"], clipboard_text);
@@ -340,11 +340,11 @@ mod tests {
         for _ in 0..500 {
             app.session.push_undo("earlier edit", app.session.doc.clone(), app.session.sel.clone());
         }
-        let before = app.session.undo_steps_so_far();
+        let before = app.session.undo_mark();
         assert_eq!(app.session.undo_depth(), 500);
         app.run("edit.paste", json!({"text": "new"})).unwrap();
         assert_eq!(app.session.undo_depth(), 500);
-        assert_eq!(app.session.undo_steps_so_far(), before + 1);
+        assert_eq!(app.session.undo_mark(), before + 1);
         assert!(app.paste_options.as_ref().is_some_and(|p| p.current(&app)));
     }
 

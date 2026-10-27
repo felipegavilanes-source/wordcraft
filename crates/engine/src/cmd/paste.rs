@@ -298,9 +298,7 @@ pub fn paste_fragment(s: &mut Session, v: &Value) -> Result<Fragment, CmdError> 
 /// indents, list). Empty lines become empty paragraphs.
 pub fn insert_text(s: &mut Session, text: &str) -> Result<(), CmdError> {
     let text = text.replace("\r\n", "\r").replace('\n', "\r");
-    // A tracked cut followed immediately by Keep Text Only is still a move.
-    // Use the move-aware fragment insertion only for that case; ordinary plain-text
-    // paste keeps its destination paragraph/list semantics through paste_text.
+    // Keep Text Only immediately after a tracked cut must preserve the move pair.
     if s.pending_move.is_some() && s.doc.settings.track_changes && s.doc.settings.track_moves {
         let mut frag = Fragment::from_text(&text.replace('\r', "\n"));
         if s.pending_move.as_ref().is_some_and(|m| m.text == frag.plain_text()) {
