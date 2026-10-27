@@ -591,9 +591,10 @@ pub(super) fn lines(
                 // Match Word: the paragraph mark's own font colour takes precedence
                 // over the generic formatting-mark colour, except for tracked revisions.
                 let color = color.or_else(|| {
-                    let p = para?;
-                    match doc.styles.resolve_char(p.props.style.as_deref(), &p.mark).color {
-                        TextColor::Rgb(c) => Some(c),
+                    // The first style was resolved for the paragraph mark, including
+                    // table character formatting, before laying out the text runs.
+                    match &pl.styles.first()?.rc.color {
+                        TextColor::Rgb(c) => Some(*c),
                         TextColor::Auto => None,
                     }
                 });
