@@ -58,7 +58,7 @@ pub fn cut_tracked(s: &mut Session) -> Result<bool, CmdError> {
     }
     s.doc.revisions.push(Revision::new(RevisionKind::Delete, s.author.clone(), now_iso()));
     let rid = (s.doc.revisions.len() - 1) as u32;
-    let at = track_delete_as(s, &a, &b, rid)?;
+    let at = track_delete_as(s, &a, &b, rid)?.at;
     s.sel = Selection::caret(at);
     // Only the author's own insertions were cut: they are gone, not moved.
     if in_use(s, rid) {
@@ -238,6 +238,29 @@ mod tests {
         s.run("edit.paste", &json!({})).unwrap();
         let k: Vec<String> = kinds(&mut s).into_iter().map(|(k, _)| k).collect();
         assert_eq!(k, ["delete", "insert"]);
+    }
+
+    /// Merge Formatting and Keep Text Only must not turn a tracked move into
+    /// an unrelated deletion and insertion.
+    #[test]
+    fn tracked_cut_with_alternative_paste_modes_preserves_move_pair() {
+        for command in ["edit.pasteMerge", "edit.pasteText"] {
+            let mut s = Session::new(Document::new());
+            s.run("document.setText", &json!({"text": "First one.\nSecond one.\nThird one."})).unwrap();
+            s.run("file.setAuthor", &json!({"name": "Ana"})).unwrap();
+            s.run("review.trackChanges", &json!({"value": true})).unwrap();
+            s.run("select.range", &json!({"anchor": {"block": 1, "off": 0}, "focus": {"block": 2, "off": 0}})).unwrap();
+            s.run("edit.cut", &json!({})).unwrap();
+            s.run("caret.set", &json!({"pos": {"block": 0, "off": 0}})).unwrap();
+            s.run(command, &json!({})).unwrap();
+            let dest = s.doc.para_at(&Pos::body(0, 0)).unwrap();
+            let revision = dest.runs[0].props.ins;
+            assert_eq!(s.doc.move_name(revision), Some("move1"), "{command}: destination must be marked as a move");
+            assert!(
+                s.doc.revisions.iter().filter(|r| r.move_name.as_deref() == Some("move1")).count() >= 2,
+                "{command}: both ends must share a move name"
+            );
+        }
     }
 
     /// Gap #5: with Track moves off (`w:doNotTrackMoves`), a tracked cut and paste of a
