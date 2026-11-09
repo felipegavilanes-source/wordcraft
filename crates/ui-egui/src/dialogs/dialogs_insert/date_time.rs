@@ -1,7 +1,14 @@
 //! Date & Time insertion dialog (Word-style format and language selection).
-use super::*;
+use egui::{Stroke, Ui};
+use serde::Serialize;
+use serde_json::{Value, json};
 
-/// Word-style Insert > Date & Time dialog.
+use super::buttons;
+use super::field::DATE_FORMATS;
+use crate::WordApp;
+use crate::theme::Tokens;
+
+/// Predefined Portuguese (Brazil) date and time format pictures.
 const PT_DATE_FORMATS: &[&str] = &[
     "dd/MM/yyyy",
     "dddd, d 'de' MMMM 'de' yyyy",
@@ -41,19 +48,23 @@ pub struct DateTimeForm {
     /// Last insertion failure; retain the window so the user can change the choice.
     #[serde(skip)]
     pub error: Option<String>,
+    /// Brief status confirmation message (e.g. after setting default preferences).
+    #[serde(skip)]
+    pub status: Option<&'static str>,
 }
 impl DateTimeForm {
     /// Restore a saved format/language or choose a sensible default for the UI language.
     pub fn new(app: &WordApp) -> Self {
         let language = if app.ui.date_time_language.is_empty() {
-            if crate::i18n::current().code().starts_with("pt") { "pt-BR" } else { "en-US" }.to_string()
+            if crate::i18n::current().code().to_ascii_lowercase().starts_with("pt") { "pt-BR" } else { "en-US" }.to_string()
+        } else if app.ui.date_time_language.to_ascii_lowercase().starts_with("pt") {
+            "pt-BR".to_string()
         } else {
-            app.ui.date_time_language.clone()
+            "en-US".to_string()
         };
-        let language = if language == "pt-BR" { language } else { "en-US".into() };
         let list = if language == "pt-BR" { PT_DATE_FORMATS } else { DATE_FORMATS };
         let format = if list.contains(&app.ui.date_time_format.as_str()) { app.ui.date_time_format.clone() } else { list[0].to_string() };
-        Self { format, language, update: app.ui.date_time_update, error: None }
+        Self { format, language, update: app.ui.date_time_update, error: None, status: None }
     }
     /// Pictures available in the chosen language.
     fn formats(&self) -> &'static [&'static str] {
@@ -87,7 +98,7 @@ pub(super) fn date_time_ui(app: &mut WordApp, ui: &mut Ui, f: &mut DateTimeForm)
         ui.add_space(12.0);
         ui.vertical(|ui| {
             ui.label(tl!("Language"));
-            egui::ComboBox::from_id_salt("date_time_lang")
+            craft_ui::ComboBox::from_id_salt("date_time_lang")
                 .selected_text(if f.language == "pt-BR" { tl!("Portuguese (Brazil)") } else { tl!("English (United States)") })
                 .show_ui(ui, |ui| {
                     if ui.selectable_label(f.language == "pt-BR", tl!("Portuguese (Brazil)")).clicked() {
@@ -108,6 +119,10 @@ pub(super) fn date_time_ui(app: &mut WordApp, ui: &mut Ui, f: &mut DateTimeForm)
         app.ui.date_time_format = f.format.clone();
         app.ui.date_time_language = f.language.clone();
         app.ui.date_time_update = f.update;
+        f.status = Some(tl!("Default format saved."));
+    }
+    if let Some(status) = f.status {
+        ui.colored_label(tokens.text_dim, status);
     }
     if let Some(error) = &f.error {
         ui.colored_label(ui.visuals().error_fg_color, error);
@@ -124,4 +139,3 @@ pub(super) fn date_time_ui(app: &mut WordApp, ui: &mut Ui, f: &mut DateTimeForm)
     }
     cancel
 }
-
